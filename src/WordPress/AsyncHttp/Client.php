@@ -3,7 +3,6 @@
 namespace WordPress\AsyncHttp;
 
 use WordPress\AsyncHttp\StreamWrapper\ChunkedEncodingWrapper;
-use WordPress\AsyncHttp\StreamWrapper\EventLoopWrapper;
 use WordPress\AsyncHttp\StreamWrapper\InflateStreamWrapper;
 
 
@@ -98,10 +97,13 @@ class Client {
 	private $event;
 	private $request;
 	private $response_body_chunk;
+	private $timeout;
+	private $requests_started_at = [];
 
 	public function __construct( $options = [] ) {
 		$this->concurrency   = $options['concurrency'] ?? 10;
 		$this->max_redirects = $options['max_redirects'] ?? 3;
+		$this->timeout       = $options['timeout'] ?? 10;
 		$this->requests      = [];
 	}
 
@@ -122,6 +124,7 @@ class Client {
 			$this->requests[]                  = $request;
 			$this->events[ $request->id ]      = [];
 			$this->connections[ $request->id ] = new Connection( $request );
+			$this->requests_started_at[ $request->id ] = microtime(true);
 		}
 	}
 
@@ -280,6 +283,12 @@ class Client {
 			return false;
 		}
 
+		foreach($this->get_active_requests() as $request) {
+			if(microtime(true) - $this->requests_started_at[ $request->id ] > $this->timeout) {
+				$this->set_error($request, new HttpError('Request timed out.'));
+			}
+		}
+
 		$this->open_nonblocking_http_sockets(
 			$this->get_active_requests( Request::STATE_ENQUEUED )
 		);
@@ -356,6 +365,7 @@ class Client {
 	}
 
 	private function close_connection( Request $request ) {
+		unset($this->requests_started_at[ $request->id ]);
 		$socket = $this->connections[ $request->id ]->http_socket;
 		if ( $socket && is_resource( $socket ) ) {
 			// Close the TCP socket
@@ -767,7 +777,7 @@ class Client {
 				'tcp://' . $host . ':' . $port,
 				$errno,
 				$errstr,
-				30,
+				$this->timeout,
 				STREAM_CLIENT_CONNECT | STREAM_CLIENT_ASYNC_CONNECT,
 				$context
 			);
