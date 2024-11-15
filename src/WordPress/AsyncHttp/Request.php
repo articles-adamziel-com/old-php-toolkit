@@ -77,4 +77,8 @@ class Request {
 		return $request;
 	}
 
+	public function is_redirected() {
+		return null !== $this->redirected_to;
+	}
+
 }

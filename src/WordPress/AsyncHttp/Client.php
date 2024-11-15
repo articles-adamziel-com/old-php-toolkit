@@ -594,14 +594,15 @@ class Client {
 					$response->total_bytes = (int) $total;
 				}
 
+				$this->events[ $request->id ][ Client::EVENT_GOT_HEADERS ] = true;
+
 				// If we're being redirected, we don't need to wait for the body.
 				if ( $response->status_code >= 300 && $response->status_code < 400 ) {
 					$request->state = Request::STATE_RECEIVED;
 					break;
 				}
 
-				$request->state                                            = Request::STATE_RECEIVING_BODY;
-				$this->events[ $request->id ][ Client::EVENT_GOT_HEADERS ] = true;
+				$request->state = Request::STATE_RECEIVING_BODY;
 				break;
 			}
 		}
