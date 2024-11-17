@@ -708,7 +708,7 @@ class Client {
 		$status  = explode( ' ', $status );
 		$status  = array(
 			'protocol' => $status[0],
-			'code'     => $status[1],
+			'code'     => (int) $status[1],
 			'message'  => $status[2],
 		);
 		$headers = array();
@@ -822,17 +822,29 @@ class Client {
 		$path  = ( isset( $parts['path'] ) ? $parts['path'] : '/' ) . ( isset( $parts['query'] ) ? '?' . $parts['query'] : '' );
 
 		$headers = [
-			"Host"            => $host,
-			"User-Agent"      => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36",
-			"Accept"          => "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-			"Accept-Encoding" => "gzip",
-			"Accept-Language" => "en-US,en;q=0.9",
-			"Connection"      => "close",
+			"host"            => $host,
+			"user-agent"      => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.82 Safari/537.36",
+			"accept"          => "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+			"accept-language" => "en-US,en;q=0.9",
+			"connection"      => "close",
 		];
 		foreach ( $request->headers as $k => $v ) {
 			$headers[ $k ] = $v;
 		}
 
+		/**
+		 * Disable the gzip transfer compression when requesting a byte range.
+		 *
+		 * When we're requesting a byte range AND gzipped transfer encoding,
+		 * our intention is to get compressed bytes 0-X of the original file.
+		 *
+		 * However, some servers will compress the file first, and then return
+		 * the compressed bytes 0-X. The result is both unpredictable and impossible
+		 * to decompress.
+		 */
+		if(!array_key_exists('range', $headers)) {
+			$headers['accept-encoding'] = 'gzip';
+		}
 
 		$request_parts = array(
 			"$request->method $path HTTP/$request->http_version",

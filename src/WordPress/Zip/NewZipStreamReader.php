@@ -8,6 +8,7 @@ namespace WordPress\Zip;
  * 
  * @TODO: Replace ZipStreamReader with this class once the consumers of
  *        ZipStreamReader have been updated to use the new interface.
+ * @TODO: Replace fopen() et al. with the Stream interface (append_bytes() etc.)
  */
 class NewZipStreamReader {
 

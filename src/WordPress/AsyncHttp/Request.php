@@ -50,7 +50,7 @@ class Request {
 		$this->is_ssl = strpos( $url, 'https://' ) === 0;
 
 		$this->method             = $request_info['method'];
-		$this->headers            = $request_info['headers'];
+		$this->headers            = array_change_key_case($request_info['headers'], CASE_LOWER);
 		$this->upload_body_stream = $request_info['body_stream'];
 		$this->http_version       = $request_info['http_version'];
 		$this->redirected_from    = $request_info['redirected_from'];
