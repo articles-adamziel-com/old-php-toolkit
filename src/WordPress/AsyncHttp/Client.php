@@ -696,7 +696,15 @@ class Client {
 			}
 
 			$this->events[ $request->id ][ Client::EVENT_REDIRECT ] = true;
-			$this->enqueue( new Request( $redirect_url, [ 'redirected_from' => $request ] ) );
+			$this->enqueue(
+				new Request(
+					$redirect_url,
+					[ 
+						'method' => $request->method,
+						'redirected_from' => $request,
+					]
+				)
+			);
 		}
 	}
 
