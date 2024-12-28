@@ -179,4 +179,13 @@ class WP_Remote_File_Reader extends WP_Byte_Reader {
 	public function is_finished(): bool {
 		return $this->is_finished;
 	}
+
+	public function close(): bool {
+		_doing_it_wrong(
+			__METHOD__,
+			'Not implemented yet',
+			'1.0.0'
+		);
+		return false;
+	}
 }

@@ -202,4 +202,11 @@ class WP_Remote_File_Ranged_Reader extends WP_Byte_Reader {
 		return $this->remote_file_length;
 	}
 
+	public function close(): bool {
+		if(null !== $this->current_reader) {
+			$this->current_reader->close();
+			$this->current_reader = null;
+		}
+		return true;
+	}
 }
