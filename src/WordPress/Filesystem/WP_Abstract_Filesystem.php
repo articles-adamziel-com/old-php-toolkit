@@ -40,16 +40,16 @@ abstract class WP_Abstract_Filesystem {
 	 * 
 	 * @example
 	 * 
-	 * $fs->start_streaming_file($path);
+	 * $fs->open_file_stream($path);
 	 * while($fs->next_file_chunk()) {
 	 *     $chunk = $fs->get_file_chunk();
 	 *     // process $chunk
 	 * }
-	 * $fs->close_file_reader();
+	 * $fs->close_file_stream();
 	 * 
 	 * @param string $path The path to the file.
 	 */
-	abstract public function start_streaming_file($path);
+	abstract public function open_file_stream($path);
 
 	/**
 	 * Get the next chunk of a file.
@@ -65,6 +65,13 @@ abstract class WP_Abstract_Filesystem {
 	 */
 	abstract public function get_file_chunk();
 
+    /**
+     * Get the length of the streamed file.
+     * 
+     * @return int|false The length of the file or false if the file is not streamed.
+     */
+    abstract public function get_streamed_file_length();
+
 	/**
 	 * Get the error message of the filesystem.
 	 * 
@@ -75,7 +82,7 @@ abstract class WP_Abstract_Filesystem {
 	/**
 	 * Close the file reader.
 	 */
-	abstract public function close_file_reader();
+	abstract public function close_file_stream();
 
 	// @TODO: Support for write methods, perhaps in a separate interface?
 	// abstract public function append_to($path, $data);
@@ -93,8 +100,8 @@ abstract class WP_Abstract_Filesystem {
 	 * @param string $path The path to the file.
 	 * @return string|false The contents of the file or false if the file does not exist.
 	 */
-	public function read_file($path) {
-		$this->start_streaming_file($path);
+	public function get_contents($path) {
+		$this->open_file_stream($path);
 		$body = '';
 		while($this->next_file_chunk()) {
 			$chunk = $this->get_file_chunk();
@@ -103,7 +110,7 @@ abstract class WP_Abstract_Filesystem {
 			}
 			$body .= $chunk;
 		}
-		$this->close_file_reader();
+		$this->close_file_stream();
 		return $body;
 	}
 

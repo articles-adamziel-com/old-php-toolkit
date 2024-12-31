@@ -10,6 +10,7 @@ class WP_Zip_Filesystem extends WP_Abstract_Filesystem {
 	private $zip;
 	private $byte_reader;
 	private $file_chunk;
+	private $file_path;
 	private $central_directory;
 	private $central_directory_end_header;
 	private $opened_file_finished = false;
@@ -104,7 +105,7 @@ class WP_Zip_Filesystem extends WP_Abstract_Filesystem {
 		return isset($this->central_directory[$path]) && self::TYPE_FILE === $this->central_directory[$path]['type'];
 	}
 
-	public function start_streaming_file($path) {
+	public function open_file_stream($path) {
 		$this->opened_file_finished = false;
 		$this->file_chunk = null;
 		if($this->state === self::STATE_ERROR) {
@@ -130,6 +131,7 @@ class WP_Zip_Filesystem extends WP_Abstract_Filesystem {
 			);
 			return false;
 		}
+		$this->file_path = $path;
 		return $this->zip->seek_to_record($this->central_directory[$path]['firstByteAt']);
 	}
 
@@ -152,6 +154,10 @@ class WP_Zip_Filesystem extends WP_Abstract_Filesystem {
 			$this->opened_file_finished = true;
 		}
 		return true;
+	}
+
+	public function get_streamed_file_length() {
+		return $this->central_directory[$this->file_path]['fileSize'];
 	}
 	
 	public function get_file_chunk(): string {
@@ -264,7 +270,7 @@ class WP_Zip_Filesystem extends WP_Abstract_Filesystem {
 		return true;
 	}
 
-	public function close_file_reader() {
+	public function close_file_stream() {
 		return true;
 	}
 

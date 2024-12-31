@@ -56,7 +56,7 @@ class WP_Local_Filesystem extends WP_Abstract_Filesystem {
 	//        but that could suggest that the reader is a separate object
 	//        and that we can have multiple readers open at the same time.
 	private $last_file_reader = null;
-	public function start_streaming_file($path) {
+	public function open_file_stream($path) {
 		if($this->last_file_reader) {
 			$this->last_file_reader->close();
 		}
@@ -73,11 +73,15 @@ class WP_Local_Filesystem extends WP_Abstract_Filesystem {
 		return $this->last_file_reader->get_bytes();
 	}
 
+    public function get_streamed_file_length() {
+        return $this->last_file_reader->length();
+    }
+
 	public function get_error_message() {
 		return $this->last_file_reader->get_last_error();
 	}
 
-	public function close_file_reader() {
+	public function close_file_stream() {
 		if($this->last_file_reader) {
 			$this->last_file_reader->close();
 			$this->last_file_reader = null;
