@@ -1,0 +1,91 @@
+{
+    "name": "wordpress/components",
+    "type": "library",
+    "description": "WordPress Components",
+    "keywords": [
+        "wordpress",
+        "components"
+    ],
+    "homepage": "https://wordpress.org",
+    "license": "GPL-2.0-or-later",
+    "authors": [
+        {
+            "name": "Adam Zielinski",
+            "email": "adam@adamziel.com"
+        },
+        {
+            "name": "WordPress Team",
+            "email": "wordpress@wordpress.org"
+        }
+    ],
+    "require": {
+        "php": ">=7.2",
+        "ext-json": "*"
+    },
+    "require-dev": {
+        "yoast/phpunit-polyfills": "2.0.0",
+        "phpunit/phpunit": "^9.5"
+    },
+    "autoload": {
+        "exclude-from-classmap": [
+            "**/Tests/",
+            "**/bin/",
+            "/Tests/"
+        ],
+        "classmap": [
+            "components/DataLiberation/vendor-patched/",
+            "components/Blueprints/src/",
+            "components/Markdown/vendor-patched",
+            "components/HTML/./"
+        ],
+        "files": [
+            "components/DataLiberation/URL/functions.php",
+            "components/Blueprints/src/WordPress/Blueprints/functions.php",
+            "components/Encoding/utf8_decoder.php",
+            "components/Filesystem/functions.php",
+            "components/Polyfill/wordpress.php",
+            "components/Polyfill/mbstring.php",
+            "components/Git/functions.php"
+        ],
+        "psr-4": {
+            "WordPress\\DataLiberation\\": "components/DataLiberation/",
+            "Rowbot\\": "components/DataLiberation/vendor-patched/",
+            "WordPress\\HttpClient\\": "components/HttpClient/",
+            "WordPress\\": "components/Blueprints/src/WordPress",
+            "Pimple\\": "components/Blueprints/src/pimple/pimple/src/Pimple",
+            "Psr\\Container\\": "components/Blueprints/src/psr/container",
+            "Psr\\SimpleCache\\": "components/Blueprints/src/psr/simple-cache",
+            "Symfony\\Component\\Process\\": "components/Blueprints/src/Symfony/process",
+            "Symfony\\Component\\EventDispatcher\\": "components/Blueprints/src/Symfony/event-dispatcher",
+            "Symfony\\Component\\filesystem\\": "components/Blueprints/src/Symfony/filesystem",
+            "Opis\\JsonSchema\\": "components/Blueprints/src/opis/json-schema/src",
+            "Opis\\String\\": "components/Blueprints/src/opis/string/src",
+            "Opis\\Uri\\": "components/Blueprints/src/opis/uri/src",
+            "WordPress\\BlockParser\\": "components/BlockParser/",
+            "WordPress\\Markdown\\": "components/Markdown/",
+            "WordPress\\Filesystem\\": "components/Filesystem/",
+            "WordPress\\XML\\": "components/XML/",
+            "WordPress\\ByteStream\\": "components/ByteStream/",
+            "WordPress\\Zip\\": "components/Zip/",
+            "WordPress\\HttpServer\\": "components/HttpServer/",
+            "WordPress\\CORSProxy\\": "components/CORSProxy/",
+            "WordPress\\Git\\": "components/Git/"
+        }
+    },
+    "scripts": {
+        "regenerate-composer": "php bin/regenerate_composer.json.php",
+        "test": "phpunit -c phpunit.xml",
+        "lint": "phpcs --standard=WordPress .",
+        "lint-fix": "phpcbf --standard=WordPress ."
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "components/*",
+            "options": {
+                "symlink": true
+            }
+        }
+    ],
+    "minimum-stability": "dev"
+}

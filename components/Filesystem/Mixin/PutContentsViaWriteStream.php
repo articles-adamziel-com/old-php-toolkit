@@ -1,0 +1,30 @@
+<?php
+
+namespace WordPress\Filesystem\Mixin;
+
+use WordPress\ByteStream\Reader\ByteReader;
+use WordPress\Filesystem\FilesystemException;
+
+/**
+ * Implements put_contents() using the write stream provided by the open_write_stream() method.
+ */
+trait PutContentsViaWriteStream {
+
+	public function put_contents($path, $data, $options = []) {
+		$stream = $this->open_write_stream($path);
+        try {
+            if(is_string($data)) {
+                $stream->append_bytes($data);
+            } else if(is_object($data) && $data instanceof ByteReader) {
+                while($data->next_bytes()) {
+                    $stream->append_bytes($data->get_bytes());
+                }
+            } else {
+				throw new FilesystemException( 'Invalid $data argument provided. Expected a string or a Byte_Reader instance. Received: ' . gettype($data) );
+			}
+		} finally {
+			$stream->close();
+		}
+	}
+
+}

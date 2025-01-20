@@ -1,0 +1,182 @@
+<?php
+
+namespace WordPress\Filesystem;
+
+use WordPress\ByteStream\MemoryPipe;
+use WordPress\ByteStream\Reader\ByteReader;
+use WordPress\Filesystem\Layer\ChrootLayer;
+
+/**
+ * A filesystem implementation that reads from an uploaded directory tree structure.
+ * This is useful for handling file uploads through the REST API where files are
+ * sent as part of a directory tree structure.
+ */
+class UploadedFilesystem implements Filesystem {
+
+    use Mixin\ReadOnlyFilesystem,
+        Mixin\GetContentsViaReadStream;
+
+    /**
+     * @var array The directory tree structure
+     */
+    private $tree;
+
+    /**
+     * @var REST_Request The request object containing uploaded files
+     */
+    private $request;
+
+    /**
+     * @var Filesystem The filesystem to read the uploaded files from.
+     */
+    private $uploads_fs;
+
+    /**
+     * Create a new UploadedFilesystem instance.
+     *
+     * @param REST_Request $request The request object containing uploaded files
+     * @param string $tree_parameter_name The name of the parameter containing the tree structure
+     * @param array $options The options array {
+     *  @var Filesystem $uploads_fs Optional. The filesystem to read the uploaded files from.
+     * }
+     * @return UploadedFilesystem The new instance
+     */
+    static public function create($request, $tree_parameter_name, $options = []) {
+        return new ChrootLayer(
+            new UploadedFilesystem($request, $tree_parameter_name, $options),
+            '/'
+        );
+    }
+
+    /**
+     * @internal
+     * Use the static create() method instead.
+     *
+     * @param array $tree The directory tree structure
+     * @param array $options The options array
+     * @param Filesystem $uploads_fs The filesystem to read the uploaded files from.
+     * @param REST_Request $request The request object containing uploaded files
+     */
+    private function __construct($request, $tree_parameter_name, $options = []) {
+        $tree_json = $request->get_param($tree_parameter_name);
+        if (!$tree_json) {
+            throw new FilesystemException( 'Invalid file tree structure');
+        }
+
+        $tree = json_decode($tree_json, true);
+        if (!$tree) {
+            throw new FilesystemException( 'Invalid JSON structure');
+        }
+
+        if(!isset($tree['type']) || $tree['type'] !== 'directory' || !isset($tree['name']) || $tree['name'] !== '') {
+            $tree = [
+                'type' => 'directory',
+                'name' => '',
+                'children' => $tree
+            ];
+        }
+
+        $this->request = $request;
+        $this->tree = $tree;
+        $this->uploads_fs = $options['uploads_fs'] ?? LocalFilesystem::create('/');
+    }
+
+    public function ls($parent = '/') {
+        $parent = wp_canonicalize_path($parent);
+        $node = $this->find_node($parent);
+        if (!$node || $node['type'] !== 'directory') {
+            return [];
+        }
+        return array_map(
+            function($child) { return $child['name']; },
+            $node['children'] ?? []
+        );
+    }
+
+    public function is_dir($path) {
+        $node = $this->find_node($path);
+        return $node && $node['type'] === 'directory';
+    }
+
+    public function is_file($path) {
+        $node = $this->find_node($path);
+        return $node && $node['type'] === 'file';
+    }
+
+    public function exists($path) {
+        return $this->find_node($path) !== null;
+    }
+
+    public function mkdir($path, $options = []) {
+        throw new FilesystemException( 'Not implemented' );
+    }
+
+    public function rm($path) {
+        throw new FilesystemException( 'Not implemented' );
+    }
+
+    public function rmdir($path, $options = []) {
+        throw new FilesystemException( 'Not implemented' );
+    }
+
+    public function open_read_stream($path): ByteReader {
+        $node = $this->find_node($path);
+        if (!$node || $node['type'] !== 'file') {
+            throw new FilesystemException(
+				sprintf('File not found: %s', $path)
+			);
+        }
+
+        // Handle file content from request
+        if (!isset($node['content']) || !is_string($node['content'])) {
+            $node['content'] = '';
+        }
+
+        if(strpos($node['content'], '@file:') === 0) {
+            $file_key = substr($node['content'], 6);
+            $uploaded_file = $this->request->get_file_params()[$file_key] ?? null;
+
+            if (!$uploaded_file || $uploaded_file['error'] !== UPLOAD_ERR_OK) {
+                throw new FilesystemException(
+					sprintf('File upload error: %s', $uploaded_file['error'])
+				);
+            }
+
+            return $this->uploads_fs->open_read_stream($uploaded_file['tmp_name']);
+        }
+
+        // Handle inline content
+        return new MemoryPipe($node['content']);
+    }
+
+    /**
+     * Find a node in the tree by its path
+     *
+     * @param string $path The path to find
+     * @return array|null The node if found, null otherwise
+     */
+    private function find_node($path) {
+        $path = trim($path, '/');
+        if($path === '') {
+            return $this->tree;
+        }
+
+        $parts = explode('/', $path);
+        $current = $this->tree;
+        foreach ($parts as $part) {
+            $found = false;
+            foreach ($current['children'] as $node) {
+                if ($node['name'] === $part) {
+                    $found = true;
+                    $current = $node;
+                    break;
+                }
+            }
+            if (!$found) {
+                return null;
+            }
+        }
+
+        return $current;
+    }
+}

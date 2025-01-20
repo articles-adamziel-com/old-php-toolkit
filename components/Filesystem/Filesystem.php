@@ -1,0 +1,147 @@
+<?php
+
+namespace WordPress\Filesystem;
+
+use WordPress\ByteStream\Reader\ByteReader;
+use WordPress\ByteStream\Writer\ByteWriter;
+use WordPress\Filesystem\FilesystemException;
+
+/**
+ * Interface for filesystem implementations.
+ *
+ * It enables navigating multiple filesystem implementations in a unified way.
+ * For example, Zip_Filesystem and Local_Filesystem are both implemented
+ * as subclasses of this class.
+ */
+interface Filesystem {
+
+	/**
+	 * List the contents of a directory.
+	 *
+	 * @param string $parent The path to the parent directory.
+	 * @return array<string> The contents of the directory.
+     * @throws FilesystemException If the directory cannot be listed.
+	 */
+	public function ls($parent = '/');
+
+	/**
+	 * Check if a path is a directory.
+	 *
+	 * @param string $path The path to check.
+	 * @return bool True if the path is a directory, false otherwise.
+     * @throws FilesystemException If the path cannot be checked.
+	 */
+	public function is_dir($path);
+
+	/**
+	 * Check if a path is a file.
+	 *
+	 * @param string $path The path to check.
+	 * @return bool True if the path is a file, false otherwise.
+     * @throws FilesystemException If the path cannot be checked.
+	 */
+	public function is_file($path);
+
+	/**
+	 * Check if a path exists.
+	 *
+	 * @param string $path The path to check.
+	 * @return bool True if the path exists, false otherwise.
+     * @throws FilesystemException If the path cannot be checked.
+	 */
+	public function exists($path);
+
+	/**
+	 * Create a directory.
+	 *
+	 * @param string $path The path to create.
+	 * @param array $options Additional options.
+     * @throws FilesystemException If the directory cannot be created.
+	 */
+	public function mkdir($path, $options = []);
+
+	/**
+	 * Remove a file.
+	 *
+	 * @param string $path The path to remove.
+     * @throws FilesystemException If the file cannot be removed.
+	 */
+	public function rm($path);
+
+	/**
+	 * Remove a directory.
+	 *
+	 * @param string $path The path to remove.
+	 * @param array $options Additional options.
+     * @throws FilesystemException If the directory cannot be removed.
+	 */
+	public function rmdir($path, $options = []);
+
+	/**
+	 * Start streaming a file.
+	 *
+	 * @example
+	 *
+	 * $fs->open_read_stream($path);
+	 * while($fs->next_file_chunk()) {
+	 *     $chunk = $fs->get_file_chunk();
+	 *     // process $chunk
+	 * }
+	 * $fs->close_read_stream();
+	 *
+	 * @param string $path The path to the file.
+	 * @return ByteReader The stream identifier.
+     * @throws FilesystemException If the stream cannot be opened.
+	 */
+	public function open_read_stream($path): ByteReader;
+
+	/**
+	 * Open a write stream to a file.
+	 *
+	 * @param string $path The path to write to.
+	 * @return ByteWriter The stream identifier.
+     * @throws FilesystemException If the stream cannot be opened.
+	 */
+	public function open_write_stream($path): ByteWriter;
+
+    /**
+     * Write data to a file.
+     *
+     * @param string $path The path to write to.
+     * @param string $data The data to write.
+     * @param array $options Additional options.
+     * @throws FilesystemException If the data cannot be written.
+     */
+	public function put_contents($path, $data, $options = []);
+
+    /**
+     * Copy a file from one path to another.
+     *
+     * @param string $from_path The path to copy from.
+     * @param string $to_path The path to copy to.
+     * @param array $options Additional options.
+     * @throws FilesystemException If the file cannot be copied.
+     */
+	public function copy($from_path, $to_path, $options = []);
+
+    /**
+     * Moves a file from one path to another.
+     *
+     * @param string $from_path The path to move from.
+     * @param string $to_path The path to move to.
+     * @param array $options Additional options.
+     * @throws FilesystemException If the file cannot be moved.
+     */
+	public function rename($from_path, $to_path, $options = []);
+
+	/**
+	 * Buffers the entire contents of a file into a string
+	 * and returns it.
+	 *
+	 * @param string $path The path to the file.
+	 * @return string The contents of the file.
+	 * @throws FilesystemException If the file cannot be read.
+	 */
+	public function get_contents($path);
+
+}
