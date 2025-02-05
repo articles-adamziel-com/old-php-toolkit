@@ -2,8 +2,9 @@
 
 namespace WordPress\Markdown;
 
-use WordPress\DataLiberation\DataLiberationHTMLProcessor;
+use WordPress\DataLiberation\DataFormatConsumer\BlocksWithMetadata;
 use WordPress\DataLiberation\DataFormatProducer\DataFormatProducer;
+use WordPress\DataLiberation\DataLiberationHTMLProcessor;
 
 /**
  * Converts WordPress blocks and metadata to Markdown with frontmatter.
@@ -15,13 +16,13 @@ class MarkdownProducer implements DataFormatProducer {
 	private $metadata;
 	private $markdown;
 
-	public function __construct( $block_markup, $metadata = array() ) {
-		$this->block_markup = $block_markup;
+	public function __construct( BlocksWithMetadata $blocks_with_meta ) {
+		$this->block_markup = $blocks_with_meta->get_block_markup();
 		$this->state        = array(
 			'indent' => array(),
 			'listStyle' => array(),
 		);
-		$this->metadata     = $metadata;
+		$this->metadata     = $blocks_with_meta->get_all_metadata( array( 'first_value_only' => true ) );
 	}
 
 	public function produce() {

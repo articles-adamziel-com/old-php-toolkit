@@ -7,17 +7,10 @@ namespace WordPress\Filesystem\Mixin;
  */
 trait GetContentsViaReadStream {
 
-	public function get_contents($path) {
-		$stream = $this->open_read_stream($path);
-		try {
-			$body = '';
-			while($stream->next_bytes()) {
-				$body .= $stream->get_bytes();
-			}
-		} finally {
-			$stream->close();
-		}
+	public function get_contents( $path ) {
+		$stream = $this->open_read_stream( $path );
+		$body   = $stream->consume_all();
+		$stream->close_reading();
 		return $body;
 	}
-
 }

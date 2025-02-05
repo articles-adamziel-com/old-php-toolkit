@@ -22,6 +22,7 @@
 namespace WordPress\DataLiberation\Importer;
 
 use WordPress\DataLiberation\DataLiberationException;
+use WordPress\DataLiberation\ImportEntity;
 
 class EntityImporter {
 
@@ -112,25 +113,25 @@ class EntityImporter {
 		);
 	}
 
-	public function import_entity( ImportedEntity $entity ) {
+	public function import_entity( ImportEntity $entity ) {
 		$type = $entity->get_type();
 		$data = $entity->get_data();
 		switch ( $entity->get_type() ) {
-			case ImportedEntity::TYPE_POST:
+			case ImportEntity::TYPE_POST:
 				return $this->import_post( $data );
-			case ImportedEntity::TYPE_POST_META:
+			case ImportEntity::TYPE_POST_META:
 				return $this->import_post_meta( $data, $data['post_id'] );
-			case ImportedEntity::TYPE_COMMENT:
+			case ImportEntity::TYPE_COMMENT:
 				return $this->import_comment( $data, $data['post_id'] );
-			case ImportedEntity::TYPE_COMMENT_META:
+			case ImportEntity::TYPE_COMMENT_META:
 				return $this->import_comment_meta( $data, $data['comment_id'] );
-			case ImportedEntity::TYPE_TERM:
-			case ImportedEntity::TYPE_TAG:
-			case ImportedEntity::TYPE_CATEGORY:
+			case ImportEntity::TYPE_TERM:
+			case ImportEntity::TYPE_TAG:
+			case ImportEntity::TYPE_CATEGORY:
 				return $this->import_term( $data );
-			case ImportedEntity::TYPE_USER:
+			case ImportEntity::TYPE_USER:
 				return $this->import_user( $data );
-			case ImportedEntity::TYPE_SITE_OPTION:
+			case ImportEntity::TYPE_SITE_OPTION:
 				return $this->import_site_option( $data );
 			default:
 				throw new \InvalidArgumentException( "Unknown entity type: $type" );
@@ -305,7 +306,8 @@ class EntityImporter {
 
 		// Map the parent comment, or mark it as one we need to fix
 		// TODO: add parent mapping and remapping
-		/*$requires_remapping = false;
+		/*
+		$requires_remapping = false;
 		if ( $parent_id ) {
 			if ( isset( $this->mapping['term'][ $parent_id ] ) ) {
 				$data['parent'] = $this->mapping['term'][ $parent_id ];
@@ -659,23 +661,23 @@ class EntityImporter {
 	// $terms = apply_filters( 'wp_import_post_terms', $terms, $post_id, $data );
 
 	// if ( ! empty( $terms ) ) {
-	//  $term_ids = array();
-	//  foreach ( $terms as $term ) {
-	//      $taxonomy = $term['taxonomy'];
-	//      $key = sha1( $taxonomy . ':' . $term['slug'] );
+	// $term_ids = array();
+	// foreach ( $terms as $term ) {
+	// $taxonomy = $term['taxonomy'];
+	// $key = sha1( $taxonomy . ':' . $term['slug'] );
 
-	//      if ( isset( $this->mapping['term'][ $key ] ) ) {
-	//          $term_ids[ $taxonomy ][] = (int) $this->mapping['term'][ $key ];
-	//      } else {
-	//          $meta[] = array( 'meta_key' => '_wxr_import_term', 'meta_value' => $term );
-	//          $requires_remapping = true;
-	//      }
-	//  }
+	// if ( isset( $this->mapping['term'][ $key ] ) ) {
+	// $term_ids[ $taxonomy ][] = (int) $this->mapping['term'][ $key ];
+	// } else {
+	// $meta[] = array( 'meta_key' => '_wxr_import_term', 'meta_value' => $term );
+	// $requires_remapping = true;
+	// }
+	// }
 
-	//  foreach ( $term_ids as $tax => $ids ) {
-	//      $tt_ids = wp_set_post_terms( $post_id, $ids, $tax );
-	//      do_action( 'wp_import_set_post_terms', $tt_ids, $ids, $tax, $post_id, $data );
-	//  }
+	// foreach ( $term_ids as $tax => $ids ) {
+	// $tt_ids = wp_set_post_terms( $post_id, $ids, $tax );
+	// do_action( 'wp_import_set_post_terms', $tt_ids, $ids, $tax, $post_id, $data );
+	// }
 	// }
 
 	/**
@@ -743,7 +745,7 @@ class EntityImporter {
 	/**
 	 * If fetching attachments is enabled then attempt to create a new attachment
 	 *
-	 * @param array $post Attachment post details from WXR
+	 * @param array  $post Attachment post details from WXR
 	 * @param string $url URL to fetch attachment from
 	 * @return int|WP_Error Post ID on success, WP_Error otherwise
 	 */
@@ -791,6 +793,7 @@ class EntityImporter {
 
 	/**
 	 * Import attachments.
+	 *
 	 * @TODO: Explore other interfaces for attachment import.
 	 */
 	public function import_attachment( $filepath, $post_id ) {
@@ -822,7 +825,7 @@ class EntityImporter {
 		// @TODO: Make it work with Asyncify
 		// Generate and update attachment metadata
 		// if ( ! function_exists( 'wp_generate_attachment_metadata' ) ) {
-		//     include( ABSPATH . 'wp-admin/includes/image.php' );
+		// include( ABSPATH . 'wp-admin/includes/image.php' );
 		// }
 		// $attach_data = wp_generate_attachment_metadata($attach_id, $filepath);
 		// wp_update_attachment_metadata($attach_id, $attach_data);
@@ -833,7 +836,7 @@ class EntityImporter {
 	 * Process and import post meta items.
 	 *
 	 * @param array $meta List of meta data arrays
-	 * @param int $post_id Post to associate with
+	 * @param int   $post_id Post to associate with
 	 * @param array $post Post data
 	 * @return int|WP_Error Number of meta items imported on success, error otherwise.
 	 */
@@ -889,7 +892,7 @@ class EntityImporter {
 	 * Process and import comment data.
 	 *
 	 * @param array $comments List of comment data arrays.
-	 * @param int $post_id Post to associate with.
+	 * @param int   $post_id Post to associate with.
 	 * @param array $post Post data.
 	 * @return int|WP_Error Number of comments imported on success, error otherwise.
 	 */
@@ -1028,7 +1031,7 @@ class EntityImporter {
 	 * Mark the post as existing.
 	 *
 	 * @param array $data Post data to mark as existing.
-	 * @param int $post_id Post ID.
+	 * @param int   $post_id Post ID.
 	 */
 	protected function mark_post_exists( $data, $post_id ) {
 		$exists_key                          = $data['guid'] ?? false;
@@ -1081,7 +1084,7 @@ class EntityImporter {
 	 * Mark the comment as existing.
 	 *
 	 * @param array $data Comment data to mark as existing.
-	 * @param int $comment_id Comment ID.
+	 * @param int   $comment_id Comment ID.
 	 */
 	protected function mark_comment_exists( $data, $comment_id ) {
 		$exists_key                             = sha1( $data['comment_author'] . ':' . $data['comment_date'] );
@@ -1140,7 +1143,7 @@ class EntityImporter {
 	 * Mark the term as existing.
 	 *
 	 * @param array $data Term data to mark as existing.
-	 * @param int $term_id Term ID.
+	 * @param int   $term_id Term ID.
 	 */
 	protected function mark_term_exists( $data, $term_id ) {
 		$exists_key                          = sha1( $data['taxonomy'] . ':' . $data['slug'] );

@@ -2,40 +2,21 @@
 
 namespace WordPress\Filesystem\Mixin;
 
-use WordPress\Filesystem\FilesystemException;
+use function WordPress\Filesystem\copy_between_filesystems;
 
 /**
- * Implements copy_recursive() using the read and write streams provided by the open_read_stream() and open_write_stream() methods.
+ * Implements copy() using the read and write streams provided by the open_read_stream() and open_write_stream() methods.
  */
 trait CopyFileViaStreaming {
 
-    public function copy($from_path, $to_path, $options) {
-        if(!$this->is_file($from_path)) {
-            throw new FilesystemException( sprintf('Path is not a file: %s', $from_path) );
-        }
-
-        $to_fs = $options['to_fs'] ?? $this;
-        $to_stream = $to_fs->open_write_stream($to_path);
-        try {
-            $from_stream = $this->open_read_stream($from_path);
-            try {
-                $chunks_written = 0;
-                while($from_stream->next_bytes()) {
-                    $to_stream->append_bytes($from_stream->get_bytes(), $to_stream);
-                    $chunks_written++;
-                }
-                if($chunks_written === 0) {
-                    // Make sure the file receives at least one chunk
-                    // so we can be sure it gets created in case the
-                    // destination filesystem is lazy.
-                    $to_stream->append_bytes('');
-                }
-            } finally {
-                $from_stream->close();
-            }
-        } finally {
-            $to_stream->close();
-        }
+	public function copy( $from_path, $to_path, $options = array() ) {
+		copy_between_filesystems(
+			array(
+				'source_filesystem' => $this,
+				'source_path' => $from_path,
+				'target_filesystem' => $this,
+				'target_path' => $to_path,
+			)
+		);
 	}
-
 }

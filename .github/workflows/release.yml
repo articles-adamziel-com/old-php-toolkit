@@ -1,0 +1,63 @@
+name: Build and Release
+
+on:
+    push:
+        branches:
+            - trunk
+
+jobs:
+    build-and-release:
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            packages: write
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v2
+
+            - name: Set up PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.0' # Specify the PHP version you need
+
+            - name: Install Composer dependencies
+              run: composer install --no-dev --prefer-dist
+
+            - name: Install Box
+              run: composer global require humbug/box
+
+            - name: Set up Node.js
+              uses: actions/setup-node@v2
+              with:
+                  node-version: '22'
+
+            - name: Install npm dependencies for static-files-editor
+              run: |
+                cd plugins/static-files-editor
+                npm install
+
+            - name: Build all components
+              run: bash bin/build-all.sh
+
+            - name: Create GitHub Release
+              id: create_release
+              uses: actions/create-release@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  tag_name: v${{ github.run_number }}
+                  release_name: Data Liberation plugin v${{ github.run_number }}
+                  draft: false
+                  prerelease: false
+
+            - name: Upload Release Asset
+              uses: actions/upload-release-asset@v1
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              with:
+                  upload_url: ${{ steps.create_release.outputs.upload_url }}
+                  asset_path: ./dist/plugins/data-liberation.zip
+                  asset_name: data-liberation.zip
+                  asset_content_type: application/zip
+

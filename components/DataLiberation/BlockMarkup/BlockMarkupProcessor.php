@@ -2,7 +2,7 @@
 
 namespace WordPress\DataLiberation\BlockMarkup;
 
-use \WP_HTML_Tag_Processor;
+use WP_HTML_Tag_Processor;
 
 /**
  * A processor class capable of reading and rewriting block markup.
@@ -73,6 +73,7 @@ class BlockMarkupProcessor extends WP_HTML_Tag_Processor {
 
 	/**
 	 * Iterator for traversing nested block attributes
+	 *
 	 * @var \RecursiveIteratorIterator
 	 */
 	private $block_attributes_iterator;

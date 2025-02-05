@@ -2,8 +2,8 @@
 
 namespace WordPress\DataLiberation\EntityReader;
 
-use WordPress\ByteStream\Reader\ByteReader;
-use WordPress\DataLiberation\Importer\ImportedEntity;
+use WordPress\ByteStream\ReadStream\ByteReadStream;
+use WordPress\DataLiberation\ImportEntity;
 use WordPress\XML\XMLProcessor;
 use WordPress\XML\XMLUnsupportedException;
 
@@ -232,16 +232,16 @@ class WXREntityReader implements EntityReader {
 	/**
 	 * Stream to pull bytes from when the input bytes are exhausted.
 	 *
-	 * @var WP_Byte_Reader
+	 * @var WP_Byte_Producer
 	 */
 	private $upstream;
 
-    /**
-     * Whether the reader has finished processing the input stream.
-     *
-     * @var bool
-     */
-    private $is_finished = false;
+	/**
+	 * Whether the reader has finished processing the input stream.
+	 *
+	 * @var bool
+	 */
+	private $is_finished = false;
 
 	/**
 	 * Mapping of WXR tags representing site options to their WordPress options names.
@@ -363,7 +363,7 @@ class WXREntityReader implements EntityReader {
 		),
 	);
 
-	public static function create( ?ByteReader $upstream = null, $cursor = null ) {
+	public static function create( ?ByteReadStream $upstream = null, $cursor = null ) {
 		$xml_cursor = null;
 		if ( null !== $cursor ) {
 			$cursor = json_decode( $cursor, true );
@@ -379,7 +379,7 @@ class WXREntityReader implements EntityReader {
 		}
 
 		$xml    = XMLProcessor::create_for_streaming( '', $xml_cursor );
-        $reader = new WXREntityReader( $xml );
+		$reader = new WXREntityReader( $xml );
 		if ( null !== $cursor ) {
 			$reader->last_post_id    = $cursor['last_post_id'];
 			$reader->last_comment_id = $cursor['last_comment_id'];
@@ -435,12 +435,11 @@ class WXREntityReader implements EntityReader {
 	/**
 	 * Gets the data for the current entity.
 	 *
+	 * @return ImportEntity The entity.
 	 * @since WP_VERSION
-	 *
-	 * @return ImportedEntity The entity.
 	 */
-	public function get_entity(): ImportedEntity {
-		return new ImportedEntity(
+	public function get_entity(): ImportEntity {
+		return new ImportEntity(
 			$this->get_entity_type(),
 			$this->entity_data
 		);
@@ -541,9 +540,9 @@ class WXREntityReader implements EntityReader {
 		return $this->xml->get_last_error();
 	}
 
-    public function get_xml_exception(): ?XMLUnsupportedException {
-        return $this->xml->get_exception();
-    }
+	public function get_xml_exception(): ?XMLUnsupportedException {
+		return $this->xml->get_exception();
+	}
 
 	/**
 	 * Advances to the next entity in the WXR file.
@@ -553,9 +552,9 @@ class WXREntityReader implements EntityReader {
 	 * @return bool Whether another entity was found.
 	 */
 	public function next_entity() {
-        if ($this->is_finished) {
-            return false;
-        }
+		if ( $this->is_finished ) {
+			return false;
+		}
 		while ( true ) {
 			if ( $this->read_next_entity() ) {
 				return true;
@@ -563,16 +562,16 @@ class WXREntityReader implements EntityReader {
 			// If the read failed because of incomplete input data,
 			// try pulling more bytes from upstream before giving up.
 			if ( $this->is_paused_at_incomplete_input() ) {
-                if($this->pull_upstream_bytes()) {
-                    continue;
-                } else {
-                    break;
-                }
+				if ( $this->pull_upstream_bytes() ) {
+					continue;
+				} else {
+					break;
+				}
 			}
-            $this->is_finished = true;
-            break;
+			$this->is_finished = true;
+			break;
 		}
-        return false;
+		return false;
 	}
 
 	/**
@@ -652,6 +651,7 @@ class WXREntityReader implements EntityReader {
 			/**
 			 * Custom adjustment: the Accessibility WXR file uses a non-standard
 			 * wp:wp_author tag.
+			 *
 			 * @TODO: Should WP_WXR_Entity_Reader care about such non-standard tags when
 			 *        the regular WXR importer would ignore them? Perhaps a warning
 			 *        and an upstream PR would be a better solution.
@@ -853,7 +853,7 @@ class WXREntityReader implements EntityReader {
 	 *
 	 * @param WP_Byte_Reader $stream The upstream stream.
 	 */
-	public function connect_upstream( ByteReader $stream ) {
+	public function connect_upstream( ByteReadStream $stream ) {
 		$this->upstream = $stream;
 	}
 
@@ -864,13 +864,13 @@ class WXREntityReader implements EntityReader {
 		if ( ! $this->upstream ) {
 			return false;
 		}
-		if ( ! $this->upstream->next_bytes() ) {
-			if ( $this->upstream->reached_end_of_data() ) {
-				$this->input_finished();
-			}
+		if ( $this->upstream->reached_end_of_data() ) {
+			$this->input_finished();
 			return false;
 		}
-		$this->append_bytes( $this->upstream->get_bytes() );
+
+		$available_bytes = $this->upstream->pull( 8192 );
+		$this->append_bytes( $this->upstream->consume( $available_bytes ) );
 		return true;
 	}
 
@@ -926,5 +926,4 @@ class WXREntityReader implements EntityReader {
 		$this->text_buffer            = '';
 		$this->last_opener_attributes = array();
 	}
-
 }

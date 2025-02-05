@@ -1,6 +1,6 @@
 <?php
 /**
- * Polyfills WordPress core functions for running in non-WordPress environments 
+ * Polyfills WordPress core functions for running in non-WordPress environments
  */
 
 if (
@@ -8,6 +8,12 @@ if (
 	file_exists( __DIR__ . '/../HTML/html5-named-character-references.php' )
 ) {
 	require_once __DIR__ . '/../HTML/html5-named-character-references.php';
+}
+
+if ( ! class_exists( 'WP_Block_Parser' ) ) {
+	require_once __DIR__ . '/../BlockParser/class-wp-block-parser-block.php';
+	require_once __DIR__ . '/../BlockParser/class-wp-block-parser-frame.php';
+	require_once __DIR__ . '/../BlockParser/class-wp-block-parser.php';
 }
 
 
@@ -87,7 +93,7 @@ if ( ! function_exists( 'apply_filters' ) ) {
 		foreach ( $wp_filter[ $hook_name ] as $priority => $functions ) {
 			foreach ( $functions as $function ) {
 				$args[0] = $value;
-				$value = call_user_func_array( $function['function'], array_slice( $args, 0, $function['accepted_args'] ) );
+				$value   = call_user_func_array( $function['function'], array_slice( $args, 0, $function['accepted_args'] ) );
 			}
 		}
 		return $value;
@@ -109,5 +115,12 @@ if ( ! function_exists( 'do_action' ) ) {
 				call_user_func_array( $function['function'], array_slice( $args, 0, $function['accepted_args'] ) );
 			}
 		}
+	}
+}
+
+if ( ! function_exists( 'parse_blocks' ) ) {
+	function parse_blocks( $input ) {
+		$parser = new WP_Block_Parser();
+		return $parser->parse( $input );
 	}
 }

@@ -5,6 +5,7 @@ namespace WordPress\DataLiberation\BlockMarkup;
 use Rowbot\URL\URL;
 use WordPress\DataLiberation\URL\URLInTextProcessor;
 use WordPress\DataLiberation\URL\WPURL;
+
 use function WordPress\DataLiberation\URL\urldecode_n;
 
 /**
@@ -23,7 +24,7 @@ class BlockMarkupUrlProcessor extends BlockMarkupProcessor {
 	private $url_in_text_node_updated;
 	private $inspected_url_attribute_idx = - 1;
 
-	public function __construct( $html, $base_url_string = null ) {
+	public function __construct( $html, ?string $base_url_string = null ) {
 		parent::__construct( $html );
 		$this->base_url_string = $base_url_string;
 		$this->base_url_object = $base_url_string ? WPURL::parse( $base_url_string ) : null;
@@ -136,6 +137,7 @@ class BlockMarkupUrlProcessor extends BlockMarkupProcessor {
 			 * be correctly recognized as a URL.
 			 * Without a base URL, this Processor would incorrectly skip it.
 			 */
+
 			if ( is_string( $url_maybe ) ) {
 				$parsed_url = WPURL::parse( $url_maybe, $this->base_url_string );
 				if ( false === $parsed_url ) {
@@ -256,7 +258,7 @@ class BlockMarkupUrlProcessor extends BlockMarkupProcessor {
 		}
 		if ( ! $new_raw_url ) {
 			// @TODO: When does this happen? Let's add the test coverage and
-			//        doubly verify the logic.
+			// doubly verify the logic.
 			return false;
 		}
 
@@ -264,8 +266,8 @@ class BlockMarkupUrlProcessor extends BlockMarkupProcessor {
 			// The URL-rewriting specific logic. We make an assumption that only
 			// absolute URLs are detected in text nodes.
 			// @TODO: Verify this assumption, evaluate whether this is the right
-			//        place to place this logic. Perhaps this *method* could be
-			//        decoupled into two separate *functions*?
+			// place to place this logic. Perhaps this *method* could be
+			// decoupled into two separate *functions*?
 			$this->get_token_type() !== '#text' &&
 			! str_starts_with( $this->get_raw_url(), 'http://' ) &&
 			! str_starts_with( $this->get_raw_url(), 'https://' )

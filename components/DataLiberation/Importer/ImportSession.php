@@ -3,7 +3,7 @@
 namespace WordPress\DataLiberation\Importer;
 
 use WordPress\DataLiberation\DataLiberationException;
-use \WP_Query;
+use WP_Query;
 
 /**
  * Manages import session data in the WordPress database.
@@ -153,9 +153,9 @@ class ImportSession {
 				'meta_query' => array(
 					// @TODO: This somehow makes $post empty.
 					// array(
-					//     'key' => 'current_stage',
-					//     'value' => WP_Stream_Importer::STAGE_FINISHED,
-					//     'compare' => '!='
+					// 'key' => 'current_stage',
+					// 'value' => WP_Stream_Importer::STAGE_FINISHED,
+					// 'compare' => '!='
 					// )
 				),
 			)
@@ -250,6 +250,7 @@ class ImportSession {
 
 	/**
 	 * Cache of imported entity counts to avoid repeated database queries
+	 *
 	 * @var array
 	 */
 	private $cached_imported_counts = array();
@@ -301,8 +302,8 @@ class ImportSession {
 		global $wpdb;
 		return (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM $wpdb->posts 
-				 WHERE post_type = 'frontloading_placeholder' 
+				"SELECT COUNT(*) FROM $wpdb->posts
+				 WHERE post_type = 'frontloading_placeholder'
 				 AND post_parent = %d
 				 AND post_status = %s",
 				$this->post_id,
@@ -315,8 +316,8 @@ class ImportSession {
 		global $wpdb;
 		return (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM $wpdb->posts 
-				 WHERE post_type = 'frontloading_placeholder' 
+				"SELECT COUNT(*) FROM $wpdb->posts
+				 WHERE post_type = 'frontloading_placeholder'
 				 AND post_parent = %d
 				 AND post_status != %s
 				 AND post_status != %s",
@@ -378,8 +379,8 @@ class ImportSession {
 		global $wpdb;
 		return (int) $wpdb->get_var(
 			$wpdb->prepare(
-				"SELECT COUNT(*) FROM $wpdb->posts 
-			WHERE post_type = 'frontloading_placeholder' 
+				"SELECT COUNT(*) FROM $wpdb->posts
+			WHERE post_type = 'frontloading_placeholder'
 			AND post_parent = %d",
 				$this->post_id
 			)
@@ -416,14 +417,15 @@ class ImportSession {
 			 * Check if placeholder with this URL already exists
 			 * There's a race condition here – another insert may happen
 			 * between the check and the insert.
+			 *
 			 * @TODO: Explore solutions. A custom table with a UNIQUE constraint
 			 * may or may not be an option, depending on the performance impact
 			 * on 100GB+ VIP databases.
 			 */
 			$exists = $wpdb->get_var(
 				$wpdb->prepare(
-					"SELECT ID FROM $wpdb->posts 
-				WHERE post_type = 'frontloading_placeholder' 
+					"SELECT ID FROM $wpdb->posts
+				WHERE post_type = 'frontloading_placeholder'
 				AND post_parent = %d
 				AND guid = %s
 				LIMIT 1",

@@ -2,41 +2,39 @@
 
 namespace WordPress\HttpServer\ResponseWriter;
 
-class BufferingResponseWriter implements ResponseWriter {
+class BufferingResponseWriter implements ResponseWriteStream {
 
-    private $http_code = 200;
-    private $headers = [];
-    private $body = '';
-    
-    public function send_http_code($code) {
-        $this->http_code = $code;
-    }
+	private $http_code = 200;
+	private $headers   = array();
+	private $body      = '';
 
-    public function send_header($name, $value) {
-        $this->headers[$name] = $value;
-    }
+	public function send_http_code( $code ) {
+		$this->http_code = $code;
+	}
 
-    public function get_buffered_headers() {
-        return $this->headers;
-    }
+	public function send_header( $name, $value ) {
+		$this->headers[ $name ] = $value;
+	}
 
-    public function append_bytes($body): void {
-        $this->body .= $body;
-    }
+	public function get_buffered_headers() {
+		return $this->headers;
+	}
 
-    public function get_buffered_body() {
-        return $this->body;
-    }
+	public function append_bytes( $body ): void {
+		$this->body .= $body;
+	}
 
-    public function close(): void {
-        $this->is_closed = true;
-        http_response_code($this->http_code);
-        foreach ($this->headers as $key => $value) {
-            header($key . ': ' . $value);
-        }
-        header('Content-Length: ' . strlen($this->body));
+	public function get_buffered_body() {
+		return $this->body;
+	}
 
-        echo $this->body;
-    }
+	public function close_writing(): void {
+		http_response_code( $this->http_code );
+		foreach ( $this->headers as $key => $value ) {
+			header( $key . ': ' . $value );
+		}
+		header( 'Content-Length: ' . strlen( $this->body ) );
 
+		echo $this->body;
+	}
 }
