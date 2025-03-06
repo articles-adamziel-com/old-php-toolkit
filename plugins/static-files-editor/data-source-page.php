@@ -77,6 +77,8 @@ function msf_render_data_source() {
 				'isLocalDirectory' => $data_source_type === 'local_directory',
 				'isGitRepo' => $data_source_type === 'git_repo',
 				'isGithubRepo' => $data_source_type === 'github_repository',
+				'githubClientId' => defined( 'WP_STATIC_FILES_EDITOR_GITHUB_CLIENT_ID' ) ? WP_STATIC_FILES_EDITOR_GITHUB_CLIENT_ID : '',
+				'githubRedirectUri' => defined( 'WP_STATIC_FILES_EDITOR_GITHUB_REDIRECT_URI' ) ? WP_STATIC_FILES_EDITOR_GITHUB_REDIRECT_URI : '',
 			)
 		)
 	);
@@ -101,9 +103,9 @@ function msf_render_data_source() {
 								data-wp-bind--value="state.dataSourceType"
 								data-wp-on--change="actions.updateDataSourceType"
 							>
-								<option value="local_directory">Local Directory</option>
-								<option value="git_repo">Git Repo</option>
 								<option value="github_repository">GitHub Repository</option>
+								<option value="git_repo">Git Repo</option>
+								<option value="local_directory">Local Directory</option>
 							</select>
 						</td>
 					</tr>
@@ -173,47 +175,52 @@ function msf_render_data_source() {
 					<tr>
 						<th scope="row">GitHub Authorization</th>
 						<td>
-							<div data-wp-class--hidden="state.githubToken" class="github-auth-container">
-								<button
-									type="button"
-									class="github-auth-button"
-									data-wp-on--click="actions.authorizeWithGitHub"
-								>
-									<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-										<path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-									</svg>
-									Authorize with GitHub
-								</button>
-								<p>Connect your GitHub account to access your repositories.</p>
+							<div data-wp-class--hidden="state.isGitHubOAuthConfigured">
+								<p>GitHub OAuth is not configured. You must define <code>WP_STATIC_FILES_EDITOR_GITHUB_CLIENT_ID</code> and <code>WP_STATIC_FILES_EDITOR_GITHUB_REDIRECT_URI</code> in your <code>wp-config.php</code> file.</p>
 							</div>
-							<div data-wp-class--hidden="!state.githubToken" class="github-auth-success">
-								<div>
-									<p>
-										<span class="dashicons dashicons-yes-alt github-auth-success-icon"></span>
-										<strong>Connected to GitHub</strong>
-									</p>
-									<div class="github-auth-actions">
-										<button
-											type="button"
-											class="button"
-											data-wp-on--click="actions.fetchGitHubRepos"
-										>
-											Refresh Repositories
-										</button>
-										<button
-											type="button"
-											class="github-reauth-button"
-											data-wp-on--click="actions.reauthorizeWithGitHub"
-										>
-											Connect different account
-										</button>
+							<div data-wp-class--hidden="!state.isGitHubOAuthConfigured">
+								<div data-wp-class--hidden="state.githubToken" class="github-auth-container">
+									<button
+										type="button"
+										class="github-auth-button"
+										data-wp-on--click="actions.authorizeWithGitHub"
+									>
+										<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+											<path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+										</svg>
+										Authorize with GitHub
+									</button>
+									<p>Connect your GitHub account to access your repositories.</p>
+								</div>
+								<div data-wp-class--hidden="!state.githubToken" class="github-auth-success">
+									<div>
+										<p>
+											<span class="dashicons dashicons-yes-alt github-auth-success-icon"></span>
+											<strong>Connected to GitHub</strong>
+										</p>
+										<div class="github-auth-actions">
+											<button
+												type="button"
+												class="button"
+												data-wp-on--click="actions.fetchGitHubRepos"
+											>
+												Refresh Repositories
+											</button>
+											<button
+												type="button"
+												class="github-reauth-button"
+												data-wp-on--click="actions.reauthorizeWithGitHub"
+											>
+												Connect different account
+											</button>
+										</div>
 									</div>
 								</div>
 							</div>
 						</td>
 					</tr>
 
-					<tr data-wp-class--hidden="!state.githubToken">
+					<tr data-wp-class--hidden="!state.isGitHubConnected">
 						<th scope="row">GitHub Repository</th>
 						<td>
 							<select
@@ -231,7 +238,7 @@ function msf_render_data_source() {
 						</td>
 					</tr>
 
-					<tr data-wp-class--hidden="!state.githubToken">
+					<tr data-wp-class--hidden="!state.isGitHubConnected">
 						<th scope="row">Branch</th>
 						<td>
 							<select
@@ -249,7 +256,7 @@ function msf_render_data_source() {
 						</td>
 					</tr>
 
-					<tr data-wp-class--hidden="!state.githubToken">
+					<tr data-wp-class--hidden="!state.githubConnected">
 						<th scope="row">Path to synchronize</th>
 						<td>
 							<input type="text" class="regular-text" data-wp-bind--value="state.subdirectory" data-wp-on--input="actions.updateSubdirectory" />

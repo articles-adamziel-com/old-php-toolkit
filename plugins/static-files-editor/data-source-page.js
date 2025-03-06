@@ -14,6 +14,12 @@ const { state, actions } = store('staticFiles', {
 		get isGithubRepo() {
 			return state.dataSourceType === 'github_repository';
 		},
+		get isGitHubOAuthConfigured() {
+			return state.githubClientId && state.githubRedirectUri;
+		},
+		get isGitHubConnected() {
+			return state.isGitHubOAuthConfigured && state.githubToken;
+		},
 		notices: [],
 	},
     callbacks: {
@@ -124,9 +130,8 @@ const { state, actions } = store('staticFiles', {
             }
         },
 		async authorizeWithGitHub() {
-			// @TODO: Configure via env variables
-            const clientId = '';
-            const redirectUri = '';
+            const clientId = state.githubClientId;
+            const redirectUri = state.githubRedirectUri;
             const oauthState = Math.random().toString(36).substring(2);
             
             // Store state in localStorage to verify when the callback returns

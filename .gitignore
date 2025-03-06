@@ -26,3 +26,4 @@ buntest.php
 blueprint-url-updater.json
 components/DataLiberation/Tests/test-output-html/
 components/DataLiberation/Tests/test-output-md
+blueprint-dev.json
