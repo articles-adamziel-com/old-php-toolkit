@@ -217,69 +217,6 @@ function rpi_install_plugin_from_url( string $url, bool $is_update = false, stri
 	return $plugin_file;
 }
 
-/**
- * Helper function to restore a plugin from backup
- */
-function rpi_restore_from_backup( $backup_dir, $plugin_dir, $plugin_file, $was_active ) {
-	// Remove the failed plugin directory if it exists
-	if ( file_exists( $plugin_dir ) ) {
-		rpi_remove_directory( $plugin_dir );
-	}
-
-	// Recreate the plugin directory
-	wp_mkdir_p( $plugin_dir );
-
-	// Copy files from backup
-	$files = new RecursiveIteratorIterator(
-		new RecursiveDirectoryIterator( $backup_dir, RecursiveDirectoryIterator::SKIP_DOTS ),
-		RecursiveIteratorIterator::SELF_FIRST
-	);
-
-	foreach ( $files as $file ) {
-		$relative_path = str_replace( $backup_dir, '', $file->getPathname() );
-		$dest          = $plugin_dir . $relative_path;
-
-		if ( $file->isDir() ) {
-			wp_mkdir_p( $dest );
-		} else {
-			copy( $file->getPathname(), $dest );
-		}
-	}
-
-	// Reactivate the plugin if it was active
-	if ( $was_active ) {
-		activate_plugin( $plugin_file );
-	}
-
-	// Clean up backup directory
-	rpi_remove_directory( $backup_dir );
-}
-
-/**
- * Helper function to recursively remove a directory
- */
-function rpi_remove_directory( $dir ) {
-	if ( ! file_exists( $dir ) ) {
-		return true;
-	}
-
-	if ( ! is_dir( $dir ) ) {
-		return unlink( $dir );
-	}
-
-	foreach ( scandir( $dir ) as $item ) {
-		if ( $item == '.' || $item == '..' ) {
-			continue;
-		}
-
-		if ( ! rpi_remove_directory( $dir . DIRECTORY_SEPARATOR . $item ) ) {
-			return false;
-		}
-	}
-
-	return rmdir( $dir );
-}
-
 function rpi_store_plugin_url( $plugin_file, $url ) {
 	$plugins                 = get_option( 'rpi_installed_plugins', array() );
 	$plugins[ $plugin_file ] = $url;
