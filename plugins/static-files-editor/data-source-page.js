@@ -13,7 +13,8 @@ const { state, actions } = store('staticFiles', {
 		},
 		get isGithubRepo() {
 			return state.dataSourceType === 'github_repository';
-		}
+		},
+		notices: [],
 	},
     callbacks: {
         bindSelectedBranch(e) {
@@ -24,6 +25,7 @@ const { state, actions } = store('staticFiles', {
     actions: {
         updateGitRepo(e) {
             state.gitRepo = e.target.value;
+			state.branches = [];
         },
         updateSelectedBranch(e) {
             state.selectedBranch = e.target.value;
@@ -125,10 +127,10 @@ const { state, actions } = store('staticFiles', {
 			// @TODO: Configure via env variables
             const clientId = '';
             const redirectUri = '';
-            const state = Math.random().toString(36).substring(2);
+            const oauthState = Math.random().toString(36).substring(2);
             
             // Store state in localStorage to verify when the callback returns
-            localStorage.setItem('github_oauth_state', state);
+            localStorage.setItem('github_oauth_state', oauthState);
             
             const scope = 'repo';
             const url =
@@ -136,7 +138,7 @@ const { state, actions } = store('staticFiles', {
                 `?client_id=${clientId}` +
                 `&redirect_uri=${encodeURIComponent(redirectUri)}` +
                 `&scope=${encodeURIComponent(scope)}` +
-                `&state=${encodeURIComponent(state)}`;
+                `&state=${encodeURIComponent(oauthState)}`;
 
             // Open a popup
             const width = 600, height = 700;
@@ -159,7 +161,7 @@ const { state, actions } = store('staticFiles', {
                         message: 'GitHub authorization failed. Please try again.'
                     });
                     return;
-                }
+				}
                 
                 // Store the token on the backend immediately
                 try {
@@ -172,11 +174,12 @@ const { state, actions } = store('staticFiles', {
                     });
                     
                     // Update UI to show we're authorized
-                    state.githubToken = true;
+					state.githubToken = true;
+					await actions.fetchGitHubRepos();
                     
                     state.notices.push({
                         type: 'notice-success notice is-dismissible',
-                        message: 'Successfully authorized with GitHub! You can now fetch your repositories.'
+                        message: 'Successfully authorized with GitHub! You can now select a repository.'
                     });
                     
                     // Note: We don't fetch repositories automatically here
@@ -190,13 +193,42 @@ const { state, actions } = store('staticFiles', {
             });
         },
         
+        async reauthorizeWithGitHub() {
+            try {
+                // First, clear the existing token
+                const response = await apiFetch({
+                    path: '/static-files-editor/v1/github/clear-token',
+                    method: 'POST',
+                });
+                
+                // Reset GitHub-related state
+                state.githubToken = false;
+                state.githubRepos = [];
+                state.githubBranches = [];
+                state.selectedRepo = '';
+                state.selectedGitHubBranch = '';
+                
+                // Show notification
+                state.notices.push({
+                    type: 'notice-success notice is-dismissible',
+                    message: 'GitHub connection removed. You can now connect with a different account.'
+                });
+			} catch (error) {
+                state.notices.push({
+                    type: 'notice-error notice is-dismissible',
+                    message: 'Error removing GitHub connection. Please try again.'
+                });
+            }
+        },
+        
         async fetchGitHubRepos() {
+			console.log(state.notices);
+			console.log(state);
             try {
                 const response = await apiFetch({
                     path: '/static-files-editor/v1/github/repos',
                     method: 'GET',
                 });
-                console.log(response);
                 state.githubRepos = response;
             } catch (error) {
                 state.notices.push({

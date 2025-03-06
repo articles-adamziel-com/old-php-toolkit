@@ -98,7 +98,7 @@ class WP_Static_Files_Editor_Plugin {
 				return ! empty( $config['gitRepo'] ) && ! empty( $config['selectedBranch'] );
 			case 'github_repository':
 				$github_token = get_option( 'msf_github_token', '' );
-				return ! empty( $github_token ) && ! empty( $config['selectedRepo'] ) && ! empty( $config['selectedGitHubBranch'] );
+				return ! empty( $github_token ) && ! empty( $config['gitRepo'] ) && ! empty( $config['selectedBranch'] );
 			default:
 				return false;
 		}
@@ -120,18 +120,10 @@ class WP_Static_Files_Editor_Plugin {
 					self::$data_source = GitDataSource::create( $settings );
 					break;
 				case 'github_repository':
-					// For GitHub repositories, use the GitDataSource with the GitHub token
-					$github_token = get_option( 'msf_github_token', '' );
-					if ( empty( $github_token ) || empty( $settings['selectedRepo'] ) ) {
-						throw new RuntimeException( 'GitHub token or repository not configured' );
-					}
-					
-					// Create a Git repository URL with the token for authentication
-					// Format: https://x-access-token:TOKEN@github.com/OWNER/REPO.git
-					$settings['gitRepo'] = "https://{$github_token}@github.com/{$settings['selectedRepo']}.git";
-					$settings['selectedBranch'] = $settings['selectedGitHubBranch'];
-					$settings['subdirectory'] = $settings['githubSubdirectory'] ?? '/';
-					
+					$settings['gitRepo'] = self::get_git_remote_url( $settings['gitRepo'], [
+						'provider' => 'github',
+						'token' => get_option( 'msf_github_token', '' ),
+					] );
 					self::$data_source = GitDataSource::create( $settings );
 					break;
 			}
@@ -623,6 +615,19 @@ class WP_Static_Files_Editor_Plugin {
 					array(
 						'methods'             => 'POST',
 						'callback'            => 'WP_Static_Files_Editor_Plugin::store_github_token_endpoint',
+						'permission_callback' => function () {
+							return current_user_can( 'edit_posts' );
+						},
+					)
+				);
+
+				// Endpoint to clear GitHub token
+				register_rest_route(
+					'static-files-editor/v1',
+					'/github/clear-token',
+					array(
+						'methods'             => 'POST',
+						'callback'            => 'WP_Static_Files_Editor_Plugin::clear_github_token_endpoint',
 						'permission_callback' => function () {
 							return current_user_can( 'edit_posts' );
 						},
@@ -1974,6 +1979,14 @@ class WP_Static_Files_Editor_Plugin {
 		
 		// Store the token in site options
 		update_option( 'msf_github_token', $token );
+		
+		return array( 'success' => true );
+	}
+
+	// Endpoint to clear GitHub token
+	public static function clear_github_token_endpoint() {
+		// Delete the token from site options
+		delete_option( 'msf_github_token' );
 		
 		return array( 'success' => true );
 	}
