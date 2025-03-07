@@ -21,12 +21,19 @@ const { state, actions } = store('staticFiles', {
 			return state.isGitHubOAuthConfigured && state.githubToken;
 		},
 		notices: [],
+		fetchingRepos: false,
+		fetchingBranches: false,
 	},
     callbacks: {
         bindSelectedBranch(e) {
             const { ref } = getElement();
             ref.value = state.selectedBranch;
-        },
+		},
+		onInit() {
+			setInterval(() => {
+				state.notices = state.notices.filter(notice => notice.timestamp > Date.now() - 5000);
+			}, 1000);
+		},
     },
     actions: {
         updateGitRepo(e) {
@@ -65,6 +72,7 @@ const { state, actions } = store('staticFiles', {
             }
         },
 		async fetchBranches() {
+			state.fetchingBranches = true;
             const response = await apiFetch({
                 path: '/static-files-editor/v1/data-source/branches',
                 method: 'POST',
@@ -75,6 +83,7 @@ const { state, actions } = store('staticFiles', {
             });
             state.branches = response.refs;
             state.selectedBranch = response.default_branch;
+			state.fetchingBranches = false;
         },
         async fetchFiles() {
             const response = await apiFetch({
@@ -101,12 +110,12 @@ const { state, actions } = store('staticFiles', {
                         dataSourceType: state.dataSourceType,
                     },
                 });
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-success notice is-dismissible',
                     message: 'Settings saved successfully!'
                 });
             } catch (error) {
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-error notice is-dismissible',
                     message: 'Error saving settings. Please try again.'
                 });
@@ -118,17 +127,24 @@ const { state, actions } = store('staticFiles', {
                     path: '/static-files-editor/v1/data-source/sync',
                     method: 'POST',
                 });
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-success notice is-dismissible',
                     message: 'Force pull completed!'
                 });
             } catch (error) {
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-error notice is-dismissible',
                     message: 'Error force pulling. Please try again.'
                 });
             }
-        },
+		},
+		addNotice({type, message}) {
+			state.notices.push({
+				type,
+				message,
+				timestamp: Date.now(),
+			});
+		},
 		async authorizeWithGitHub() {
             const clientId = state.githubClientId;
             const redirectUri = state.githubRedirectUri;
@@ -161,7 +177,7 @@ const { state, actions } = store('staticFiles', {
                 
                 const authData = evt.data.data;
                 if (!authData || !authData.access_token) {
-                    state.notices.push({
+                    actions.addNotice({
                         type: 'notice-error notice is-dismissible',
                         message: 'GitHub authorization failed. Please try again.'
                     });
@@ -182,7 +198,7 @@ const { state, actions } = store('staticFiles', {
 					state.githubToken = true;
 					await actions.fetchGitHubRepos();
                     
-                    state.notices.push({
+                    actions.addNotice({
                         type: 'notice-success notice is-dismissible',
                         message: 'Successfully authorized with GitHub! You can now select a repository.'
                     });
@@ -190,7 +206,7 @@ const { state, actions } = store('staticFiles', {
                     // Note: We don't fetch repositories automatically here
                     // The user will need to click the "Refresh Repositories" button
                 } catch (error) {
-                    state.notices.push({
+                    actions.addNotice({
                         type: 'notice-error notice is-dismissible',
                         message: 'Error storing GitHub token. Please try again.'
                     });
@@ -214,12 +230,12 @@ const { state, actions } = store('staticFiles', {
                 state.selectedGitHubBranch = '';
                 
                 // Show notification
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-success notice is-dismissible',
                     message: 'GitHub connection removed. You can now connect with a different account.'
                 });
 			} catch (error) {
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-error notice is-dismissible',
                     message: 'Error removing GitHub connection. Please try again.'
                 });
@@ -227,8 +243,7 @@ const { state, actions } = store('staticFiles', {
         },
         
         async fetchGitHubRepos() {
-			console.log(state.notices);
-			console.log(state);
+			state.fetchingRepos = true;
             try {
                 const response = await apiFetch({
                     path: '/static-files-editor/v1/github/repos',
@@ -236,11 +251,13 @@ const { state, actions } = store('staticFiles', {
                 });
                 state.githubRepos = response;
             } catch (error) {
-                state.notices.push({
+                actions.addNotice({
                     type: 'notice-error notice is-dismissible',
                     message: 'Error fetching GitHub repositories. Please try again.'
                 });
-            }
+            } finally {
+				state.fetchingRepos = false;
+			}
         },
         
         async updateSelectedRepo(e) {

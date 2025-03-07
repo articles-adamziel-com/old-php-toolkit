@@ -67,12 +67,14 @@ function msf_render_data_source() {
 				'subdirectory' => '/',
 				'dataSourceType' => $data_source_type,
 				'localDirectory' => $local_directory,
-				'githubToken' => ! empty( $github_token ),
 				'githubRepos' => $github_repos,
 				'selectedRepo' => $selected_repo,
+				'selectedBranch' => '',
 			),
 			$config,
 			array(
+				'githubToken' => ! empty( $github_token ),
+				'isGitHubOAuthConfigured' => defined( 'WP_STATIC_FILES_EDITOR_GITHUB_CLIENT_ID' ) && defined( 'WP_STATIC_FILES_EDITOR_GITHUB_REDIRECT_URI' ),
 				'notices' => $notices,
 				'isLocalDirectory' => $data_source_type === 'local_directory',
 				'isGitRepo' => $data_source_type === 'git_repo',
@@ -82,9 +84,10 @@ function msf_render_data_source() {
 			)
 		)
 	);
+
 	ob_start();
 	?>
-	<div class="wrap" data-wp-interactive="staticFiles">
+	<div class="wrap" data-wp-interactive="staticFiles" data-wp-init="callbacks.onInit">
 		<h1>Data Source</h1>
 		<div id="msf-data-source-app">
 			<div id="msf-notice-container">
@@ -139,8 +142,11 @@ function msf_render_data_source() {
 								type="button"
 								class="button"
 								data-wp-on--click="actions.fetchBranches"
+								data-wp-bind--disabled="state.fetchingBranches"
 							>
-								Fetch Branches
+								<span data-wp-class--hidden="state.fetchingBranches">Fetch Branches</span>
+								<span data-wp-class--hidden="!state.fetchingBranches" class="spinner is-active" style="float: none; margin: 0;"></span>
+								<span data-wp-class--hidden="!state.fetchingBranches">Fetching...</span>
 							</button>
 						</td>
 					</tr>
@@ -151,6 +157,7 @@ function msf_render_data_source() {
 							<select
 								data-wp-watch="callbacks.bindSelectedBranch"
 								data-wp-on--change="actions.updateSelectedBranch"
+								data-wp-bind--disabled="state.fetchingBranches"
 							>
 								<option value="">Select branch</option>
 								<template data-wp-each--branch="state.branches">
@@ -160,6 +167,7 @@ function msf_render_data_source() {
 									></option>
 								</template>
 							</select>
+							<span data-wp-class--hidden="!state.fetchingBranches" class="spinner is-active" style="float: none; margin: 0 0 0 5px;"></span>
 						</td>
 					</tr>
 
@@ -220,39 +228,47 @@ function msf_render_data_source() {
 						</td>
 					</tr>
 
-					<tr data-wp-class--hidden="!state.isGitHubConnected">
+					<tr data-wp-class--hidden="!state.githubToken">
 						<th scope="row">GitHub Repository</th>
 						<td>
-							<select
-								data-wp-bind--value="state.gitRepo"
-								data-wp-on--change="actions.updateSelectedRepo"
-							>
-								<option value="">Select repository</option>
-								<template data-wp-each--repo="state.githubRepos">
-									<option
-										data-wp-text="context.repo.full_name"
-										data-wp-bind--value="context.repo.http_clone_url"
-									></option>
-								</template>
-							</select>
+							<div class="repo-select-container">
+								<select
+									data-wp-bind--value="state.gitRepo"
+									data-wp-on--change="actions.updateSelectedRepo"
+									data-wp-bind--disabled="state.fetchingRepos"
+								>
+									<option value="">Select repository</option>
+									<template data-wp-each--repo="state.githubRepos">
+										<option
+											data-wp-text="context.repo.full_name"
+											data-wp-bind--value="context.repo.http_clone_url"
+										></option>
+									</template>
+								</select>
+								<span class="spinner" data-wp-class--is-active="state.fetchingRepos"></span>
+							</div>
 						</td>
 					</tr>
 
-					<tr data-wp-class--hidden="!state.isGitHubConnected">
+					<tr data-wp-class--hidden="!state.githubToken">
 						<th scope="row">Branch</th>
 						<td>
-							<select
-								data-wp-watch="callbacks.bindSelectedBranch"
-								data-wp-on--change="actions.updateSelectedBranch"
-							>
-								<option value="">Select branch</option>
-								<template data-wp-each--branch="state.branches">
-									<option
-										data-wp-text="context.branch.niceName"
-										data-wp-bind--value="context.branch.fullName"
-									></option>
-								</template>
-							</select>
+							<div class="branch-select-container">
+								<select
+									data-wp-watch="callbacks.bindSelectedBranch"
+									data-wp-on--change="actions.updateSelectedBranch"
+									data-wp-bind--disabled="state.fetchingBranches"
+								>
+									<option value="">Select branch</option>
+									<template data-wp-each--branch="state.branches">
+										<option
+											data-wp-text="context.branch.niceName"
+											data-wp-bind--value="context.branch.fullName"
+										></option>
+									</template>
+								</select>
+								<span class="spinner" data-wp-class--is-active="state.fetchingBranches"></span>
+							</div>
 						</td>
 					</tr>
 
@@ -307,6 +323,16 @@ add_action(
 		wp_add_inline_style( 'wp-admin', '
 			.hidden {
 				display: none !important;
+			}
+
+			.spinner {
+				float: none;
+			}
+
+			.repo-select-container,
+			.branch-select-container {
+				display: flex;
+				align-items: flex-start;
 			}
 
 			.github-auth-button {

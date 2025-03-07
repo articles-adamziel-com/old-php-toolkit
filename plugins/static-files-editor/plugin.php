@@ -163,6 +163,19 @@ class WP_Static_Files_Editor_Plugin {
 		if ( empty( $posts ) ) {
 			try {
 				self::sync_data_source();
+				$data_source = self::get_data_source();
+				$fs = $data_source->get_filesystem();
+				foreach( $fs->ls('/') as $entry ) {
+					if( ! $fs->is_file( $entry ) ) {
+						continue;
+					}
+					$extension = pathinfo( $entry, PATHINFO_EXTENSION );
+					if( ! in_array( $extension, ['md', 'html'] ) ) {
+						continue;
+					}
+					self::get_or_create_post_for_file( $entry );
+				}
+
 				$posts = get_posts(
 					array(
 						'post_type'      => WP_LOCAL_FILE_POST_TYPE,
@@ -800,9 +813,9 @@ class WP_Static_Files_Editor_Plugin {
 							wp_insert_post( $revision_data );
 						} else {
 							$blocks_with_metadata = self::annotated_block_markup_to_blocks_with_metadata( $merge_result->get_merged_content() );
-							$delta_post           = array(
-								'post_content' => $blocks_with_metadata->get_block_markup(),
-								...$blocks_with_metadata->get_all_metadata( array( 'first_value_only' => true ) ),
+							$delta_post           = array_merge(
+								['post_content' => $blocks_with_metadata->get_block_markup()],
+								$blocks_with_metadata->get_all_metadata( array( 'first_value_only' => true ) ),
 							);
 							/**
 							 * The merge was successful.
@@ -988,9 +1001,11 @@ class WP_Static_Files_Editor_Plugin {
 			self::$is_running_wp_insert_post_data = true;
 			try {
 				$updated = wp_update_post(
-					array(
-						'ID' => $post->ID,
-						...$entity,
+					array_merge(
+						array(
+							'ID' => $post->ID,
+						),
+						$entity,
 					)
 				);
 			} finally {
