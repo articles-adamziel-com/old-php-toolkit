@@ -13,6 +13,21 @@ Standalone PHP libraries for use in WordPress plugins and standalone PHP project
 
 This fork consolidates a few earlier projects and explorations into a single composer package.
 
+### Using the Blueprints v2 runner
+
+The Blueprints v2 runner is an all-php CLI tool that runs Blueprints v1 and v2. To use it, download [blueprints.phar from the latest release](https://github.com/Automattic/php-toolkit/releases) and run it:
+
+```sh
+php blueprints.phar
+```
+
+From there, follow the help message for required arguments and options.
+
+If you want to use Bluepritns as a library, you absolutely can. It is designed to be reusable,
+compatible with web and CLI environments on PHP 7.2+. There's not much technical documentation
+at this point but you can refer to the [blueprints.php file](https://github.com/Automattic/php-toolkit/blob/219dc4e846af270a5009e523244d0ec23baaa32a/components/Blueprints/bin/blueprint.php#L226) to see
+how the runner is implemented.
+
 ### Using the libraries
 
 #### In WordPress
@@ -31,7 +46,7 @@ This is the minimal composer.json file you need to consume the libraries:
 {
 	"name": "my-namespace/my-package",
 	"require": {
-		"Automattic/php-toolkit": "dev-trunk"
+		"Automattic/php-toolkit": "^v0.0.21-alpha"
 	},
 	"repositories": [
 		{
