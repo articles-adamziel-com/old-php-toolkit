@@ -261,27 +261,39 @@ class Runner {
 	}
 
 	/*──────────────── Blueprint load / validation / createExecutionPlan ─────────────*/
-	private function loadBlueprint() {
-		$reference = $this->configuration->getBlueprint();
+    private function loadBlueprint() {
+        $reference = $this->configuration->getBlueprint();
 
-		if ( is_array( $reference ) ) {
-			$this->blueprintArray            = $reference;
-			$this->blueprintExecutionContext = InMemoryFilesystem::create();
+        if ( is_array( $reference ) && array_keys( $reference ) === range( 0, count( $reference ) - 1 ) ) {
+            $blueprints = [];
+            foreach ( $reference as $ref ) {
+                list( $arr ) = $this->loadBlueprintFromRef( $ref );
+                $blueprints[] = $arr;
+            }
+            $this->blueprintArray            = BlueprintMerger::merge( $blueprints );
+            $this->blueprintExecutionContext = InMemoryFilesystem::create();
 
-			return;
-		}
+            return;
+        }
+
+        list( $this->blueprintArray, $this->blueprintExecutionContext ) = $this->loadBlueprintFromRef( $reference );
+    }
+
+    private function loadBlueprintFromRef( $reference ): array {
+        $blueprintString = '';
+        $executionContext = null;
 
 		// AbsoluteLocalPath is a necessary special case to correctly support
 		// Windows absolute paths. There's so much more to them than C:\
 		//
 		// See https://www.fileside.app/blog/2023-03-17_windows-file-paths/
-		if ( $reference instanceof AbsoluteLocalPath ) {
-			$resolved = new File(
-				FileReadStream::from_path( $reference->get_path() ),
-				$reference->get_filename()
-			);
-			$blueprintString                 = $resolved->getStream()->consume_all();
-			$this->blueprintExecutionContext = LocalFilesystem::create( dirname( $reference->get_path() ) );
+                if ( $reference instanceof AbsoluteLocalPath ) {
+                        $resolved = new File(
+                                FileReadStream::from_path( $reference->get_path() ),
+                                $reference->get_filename()
+                        );
+                        $blueprintString = $resolved->getStream()->consume_all();
+                        $executionContext = LocalFilesystem::create( dirname( $reference->get_path() ) );
 		} else {
 			$resolved = $this->assets->resolve( $reference );
 			if ( $resolved instanceof File ) {
@@ -303,30 +315,30 @@ class Runner {
 				}
 
 				if ( is_zip_file_stream( $stream ) ) {
-					$blueprintString                 = $this->blueprintExecutionContext->get_contents( '/blueprint.json' );
-					$this->blueprintExecutionContext = new ZipFilesystem( $stream );
+                                $blueprintString  = ZipFilesystem::create( $stream )->get_contents( '/blueprint.json' );
+                                $executionContext = new ZipFilesystem( $stream );
 				} else {
 					// JSON file
 					$blueprintString = $stream->consume_all();
 					if ( $reference instanceof URLReference ) {
 						// @TODO: Only display this if the Blueprint references any bundled files. And in that case,
 						//        make it a fatal error.
-						$this->configuration->getLogger()->warning( 'Blueprints loaded from remote URLs have no execution context.' );
-						$this->blueprintExecutionContext = InMemoryFilesystem::create();
+                                                $this->configuration->getLogger()->warning( 'Blueprints loaded from remote URLs have no execution context.' );
+                                                $executionContext = InMemoryFilesystem::create();
 					} elseif ( $reference instanceof ExecutionContextPath ) {
 						// It was resolved as an ExecutionContextPath, but it's actually a local
 						// filesystem path at this point.
 						// The execution context is the directory containing the blueprint.json file.
-						$this->blueprintExecutionContext = LocalFilesystem::create( dirname( $reference->get_path() ) );
+                                                $executionContext = LocalFilesystem::create( dirname( $reference->get_path() ) );
 					} elseif ( $reference instanceof InlineFile ) {
-						$this->blueprintExecutionContext = InMemoryFilesystem::create();
+                                                $executionContext = InMemoryFilesystem::create();
 					} else {
 						throw new BlueprintExecutionException( 'Unsupported blueprint reference type: ' . get_class( $reference ) );
 					}
 				}
-			} elseif ( $resolved instanceof Directory ) {
-				$blueprintString                 = $resolved->filesystem->get_contents( '/blueprint.json' );
-				$this->blueprintExecutionContext = $resolved->filesystem;
+                        } elseif ( $resolved instanceof Directory ) {
+                                $blueprintString = $resolved->filesystem->get_contents( '/blueprint.json' );
+                                $executionContext = $resolved->filesystem;
 			} else {
 				throw new BlueprintExecutionException( 'Invalid blueprint reference type: ' . get_class( $reference ) );
 			}
@@ -346,19 +358,21 @@ class Runner {
 			throw new BlueprintExecutionException( 'Blueprint must be encoded as UTF-8.' );
 		}
 
-		// **JSON Validity:** Assert the input is a valid JSON document.
-		$this->blueprintArray = json_decode( $blueprintString, true );
-		if ( json_last_error() !== JSON_ERROR_NONE ) {
-			throw new BlueprintExecutionException( 'Blueprint must be a valid JSON document.' );
-		}
+                // **JSON Validity:** Assert the input is a valid JSON document.
+                $arr = json_decode( $blueprintString, true );
+                if ( json_last_error() !== JSON_ERROR_NONE ) {
+                        throw new BlueprintExecutionException( 'Blueprint must be a valid JSON document.' );
+                }
 
-		if ( ! is_array( $this->blueprintArray ) ) {
-			throw new BlueprintExecutionException( 'Blueprint must be an array.' );
-		}
-	}
+                if ( ! is_array( $arr ) ) {
+                        throw new BlueprintExecutionException( 'Blueprint must be an array.' );
+                }
 
-	private function validateBlueprint(): void {
-		if ( ! isset( $this->blueprintArray['version'] ) ) {
+                return [ $arr, $executionContext ];
+    }
+
+        private function validateBlueprint(): void {
+                if ( ! isset( $this->blueprintArray['version'] ) ) {
 			$error = V1ToV2Transpiler::validate_v1_blueprint( $this->blueprintArray );
 			if ( $error ) {
 				throw new BlueprintExecutionException( 'Invalid Blueprint v1 provided.', 0, null, $error );

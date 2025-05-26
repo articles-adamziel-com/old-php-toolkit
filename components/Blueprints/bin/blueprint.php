@@ -237,7 +237,14 @@ function handleExecCommand( array $positionalArgs, array $options, array $comman
 		}
 		echo sprintf( "  Site URL:  %s\n", $config->getTargetSiteUrl() );
 		echo sprintf( "  Site path: %s\n", $config->getTargetSiteRoot() );
-		echo sprintf( "  Blueprint: %s\n", $config->getBlueprint()->get_human_readable_name() );
+                $bp = $config->getBlueprint();
+                if ( is_array( $bp ) ) {
+                        $names = array_map( function( $r ) { return $r->get_human_readable_name(); }, $bp );
+                        $nameStr = implode( ', ', $names );
+                } else {
+                        $nameStr = $bp->get_human_readable_name();
+                }
+                echo sprintf( "  Blueprint: %s\n", $nameStr );
 		echo PHP_EOL;
 		
 		$runner->run();
@@ -276,15 +283,20 @@ function cliArgsToRunnerConfiguration( array $positionalArgs, array $options ): 
 
 	$config = new RunnerConfiguration();
 
-	// The first positional is the blueprint reference
-	try {
-		$blueprint_reference = $positionalArgs[0];
-		$config->setBlueprint( DataReference::create( $blueprint_reference, [
-			AbsoluteLocalPath::class,
-		] ) );
-	} catch ( InvalidArgumentException $e ) {
-		throw new InvalidArgumentException( "Invalid Blueprint reference: " . $positionalArgs[0] );
-	}
+        // Positional arguments are blueprint references
+        $refs = [];
+        foreach ( $positionalArgs as $ref ) {
+                try {
+                        $refs[] = DataReference::create( $ref, [ AbsoluteLocalPath::class ] );
+                } catch ( InvalidArgumentException $e ) {
+                        throw new InvalidArgumentException( "Invalid Blueprint reference: " . $ref );
+                }
+        }
+        if ( count( $refs ) === 1 ) {
+                $config->setBlueprint( $refs[0] );
+        } else {
+                $config->setBlueprints( $refs );
+        }
 
 	if ( ! empty( $options['mode'] ) ) {
 		// Accept 'create-new-site' or 'apply-to-existing-site' as CLI values, map to internal values

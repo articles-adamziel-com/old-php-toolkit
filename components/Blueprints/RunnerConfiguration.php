@@ -16,10 +16,10 @@ class RunnerConfiguration {
 		self::PERMISSION_LOCAL_FILESYSTEM_ACCESS,
 	];
 
-	/**
-	 * @var DataReference|mixed[]
-	 */
-	private $blueprintRef;
+    /**
+     * @var DataReference|array<DataReference|mixed[]>
+     */
+    private $blueprintRef;
 	/**
 	 * @var string
 	 */
@@ -67,18 +67,27 @@ class RunnerConfiguration {
 	/**
 	 * @param  DataReference|mixed[]  $r
 	 */
-	public function setBlueprint( $r ): self {
-		$this->blueprintRef = $r;
+    public function setBlueprint( $r ): self {
+        $this->blueprintRef = $r;
 
-		return $this;
-	}
+        return $this;
+    }
 
-	/**
-	 * @return DataReference|mixed[]
-	 */
-	public function getBlueprint() {
-		return $this->blueprintRef;
-	}
+    /**
+     * @param array<int,DataReference|mixed[]> $refs
+     */
+    public function setBlueprints( array $refs ): self {
+        $this->blueprintRef = $refs;
+
+        return $this;
+    }
+
+    /**
+     * @return DataReference|mixed[]|array
+     */
+    public function getBlueprint() {
+        return $this->blueprintRef;
+    }
 
 	public function setLogger( LoggerInterface $logger ): self {
 		$this->logger = $logger;
