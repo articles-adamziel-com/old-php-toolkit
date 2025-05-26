@@ -7,6 +7,10 @@ use WordPress\HttpClient\ByteStream\RequestReadStream;
 use WordPress\HttpClient\Transport\CurlTransport;
 use WordPress\HttpClient\Transport\SocketTransport;
 use WordPress\HttpClient\Transport\TransportInterface;
+use WordPress\HttpClient\Layer\LayerInterface;
+use WordPress\HttpClient\Layer\TransportLayer;
+use WordPress\HttpClient\Layer\HttpCacheLayer;
+use WordPress\HttpClient\Layer\RedirectionLayer;
 
 class Client {
 
@@ -22,7 +26,11 @@ class Client {
 	/**
 	 * @var TransportInterface
 	 */
-	private $transport;
+        private $transport;
+       /**
+        * @var LayerInterface
+        */
+       private $layer;
 
 	public function __construct( $options = array() ) {
 		$this->state = new ClientState( $options );
@@ -30,17 +38,21 @@ class Client {
 			$options['transport'] = extension_loaded( 'curl' ) ? 'curl' : 'socket';
 		}
 
-		switch ( $options['transport'] ) {
-			case 'curl':
-				$this->transport = new CurlTransport( $this->state );
-				break;
-			case 'socket':
-				$this->transport = new SocketTransport( $this->state );
-				break;
-			default:
-				throw new HttpClientException( "Invalid transport: {$options['transport']}" );
-		}
-	}
+                switch ( $options['transport'] ) {
+                        case 'curl':
+                                $this->transport = new CurlTransport( $this->state );
+                                break;
+                        case 'socket':
+                                $this->transport = new SocketTransport( $this->state );
+                                break;
+                        default:
+                                throw new HttpClientException( "Invalid transport: {$options['transport']}" );
+                }
+
+               $base   = new TransportLayer( $this->transport );
+               $cache  = new HttpCacheLayer( $this->state, $base );
+               $this->layer = new RedirectionLayer( $this, $this->state, $cache );
+        }
 
 	/**
 	 * Returns a RemoteFileReader that streams the response body of the
@@ -210,26 +222,27 @@ class Client {
 					$this->state->events[ $request_id ][ $considered_event ] = false;
 					$this->state->event                                      = $considered_event;
 					$this->state->request                                    = $this->state->get_request_by_id( $request_id );
-					switch ( $this->state->event ) {
-						case Client::EVENT_GOT_HEADERS:
-							$this->handle_redirect($this->state->request);
-							break;
-						case Client::EVENT_BODY_CHUNK_AVAILABLE:
-							$this->state->response_body_chunk = $this->state->consume_buffered_response_body( $request_id );
-							break;
-						case Client::EVENT_FAILED:
-						case Client::EVENT_FINISHED:
-							// We don't need the response buffer anymore. It's
-							// safe to clean up the connection object now. The
-							// HTTP resource have been closed by now via the
-							// close_connection() method.
-							unset( $this->state->connections[ $request_id ] );
-							break;
-					}
+                                       switch ( $this->state->event ) {
+                                               case Client::EVENT_GOT_HEADERS:
+                                                       break;
+                                               case Client::EVENT_BODY_CHUNK_AVAILABLE:
+                                                       $this->state->response_body_chunk = $this->state->consume_buffered_response_body( $request_id );
+                                                       break;
+                                               case Client::EVENT_FAILED:
+                                               case Client::EVENT_FINISHED:
+                                                        // We don't need the response buffer anymore. It's
+                                                        // safe to clean up the connection object now. The
+                                                        // HTTP resource have been closed by now via the
+                                                        // close_connection() method.
+                                                        unset( $this->state->connections[ $request_id ] );
+                                                        break;
+                                        }
 
-					return true;
-				}
-			}
+                                       $this->layer->on_event( $this->state->event, $this->state->request );
+
+                                        return true;
+                                }
+                        }
 
 			// After we've checked for any available events, see if we've run out of time.
 			// This way, we always return any events that were ready before worrying about the timeout.
@@ -239,60 +252,11 @@ class Client {
 			if ( $timeout_ms && $time_elapsed_ms >= $timeout_ms ) {
 				return false;
 			}
-		} while ( $this->transport->event_loop_tick() );
+               } while ( $this->layer->event_loop_tick() );
 
 		return false;
 	}
 
-	/**
-	 * @param  array  $requests  An array of requests.
-	 */
-	protected function handle_redirect( $request ) {
-		$response = $request->response;
-		if ( ! $response ) {
-			return;
-		}
-		$code = $response->status_code;
-		if ( ! in_array($code, [301, 302, 303, 307, 308]) ) {
-			return;
-		}
-
-		$location = $response->get_header( 'location' );
-		if ( null === $location ) {
-			return;
-		}
-
-		$redirects_so_far = 0;
-		$cause            = $request;
-		while ( $cause->redirected_from ) {
-			++ $redirects_so_far;
-			$cause = $cause->redirected_from;
-		}
-
-		if ( $redirects_so_far >= $this->state->max_redirects ) {
-			$this->state->set_request_error( $request, new HttpError( 'Too many redirects' ) );
-			return;
-		}
-
-		$redirect_url = $location;
-		$parsed = WPURL::parse($redirect_url, $request->url);
-		if(false === $parsed) {
-			$this->state->set_request_error( $request, new HttpError( sprintf( 'Invalid redirect URL: %s', $redirect_url ) ) );
-			return;
-		}
-		$redirect_url = $parsed->toString();
-
-		$this->enqueue(
-			new Request(
-				$redirect_url,
-				array(
-					// Redirects are always GET requests
-					'method'          => 'GET',
-					'redirected_from' => $request,
-				)
-			)
-		);
-	}
 
 	public function has_pending_event( $request, $event_type ) {
 		return $this->state->has_pending_event( $request, $event_type );
