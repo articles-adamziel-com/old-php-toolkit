@@ -5,6 +5,7 @@ namespace WordPress\XML;
 use WP_HTML_Attribute_Token;
 use WP_HTML_Span;
 use WP_HTML_Text_Replacement;
+use WordPress\ByteStream\ReadStream\ByteReadStream;
 
 use function WordPress\Encoding\utf8_codepoint_at;
 
@@ -354,7 +355,14 @@ class XMLProcessor {
 	 * @since WP_VERSION
 	 * @var string
 	 */
-	public $xml;
+        public $xml;
+
+       /**
+        * Optional byte stream source for automatic data pulling.
+        *
+        * @var ByteReadStream|null
+        */
+       protected $stream;
 
 	/**
 	 * Specifies mode of operation of the parser at any given time.
@@ -722,17 +730,17 @@ class XMLProcessor {
 		return $processor;
 	}
 
-	public static function create_for_streaming( $xml = '', $cursor = null, $known_definite_encoding = 'UTF-8' ) {
-		if ( 'UTF-8' !== $known_definite_encoding ) {
-			return false;
-		}
-		$processor = new XMLProcessor( $xml, self::CONSTRUCTOR_UNLOCK_CODE );
-		if ( null !== $cursor && true !== $processor->initialize_from_cursor( $cursor ) ) {
-			return false;
-		}
+       public static function create_for_streaming( $source = '', $cursor = null, $known_definite_encoding = 'UTF-8' ) {
+               if ( 'UTF-8' !== $known_definite_encoding ) {
+                       return false;
+               }
+               $processor = new XMLProcessor( $source, self::CONSTRUCTOR_UNLOCK_CODE );
+               if ( null !== $cursor && true !== $processor->initialize_from_cursor( $cursor ) ) {
+                       return false;
+               }
 
-		return $processor;
-	}
+               return $processor;
+       }
 
 	/**
 	 * Returns a re-entrancy cursor – it's a string that can instruct a new XML
@@ -824,7 +832,7 @@ class XMLProcessor {
 	 *
 	 * @see XMLProcessor::create_fragment()
 	 */
-	protected function __construct( $xml, $use_the_static_create_methods_instead = null ) {
+       protected function __construct( $xml_or_stream, $use_the_static_create_methods_instead = null ) {
 		if ( self::CONSTRUCTOR_UNLOCK_CODE !== $use_the_static_create_methods_instead ) {
 			_doing_it_wrong(
 				__METHOD__,
@@ -836,8 +844,13 @@ class XMLProcessor {
 				'6.4.0'
 			);
 		}
-		$this->xml = $xml;
-	}
+               if ( $xml_or_stream instanceof ByteReadStream ) {
+                       $this->stream = $xml_or_stream;
+                       $this->xml    = '';
+               } else {
+                       $this->xml = $xml_or_stream;
+               }
+       }
 
 	/**
 	 * Wipes out the processed XML and appends the next chunk of XML to
@@ -877,10 +890,34 @@ class XMLProcessor {
 	 * After calling this method, the processor will emit errors where
 	 * previously it would have entered the STATE_INCOMPLETE_INPUT state.
 	 */
-	public function input_finished() {
-		$this->expecting_more_input = false;
-		$this->parser_state         = self::STATE_READY;
-	}
+       public function input_finished() {
+               $this->expecting_more_input = false;
+               $this->parser_state         = self::STATE_READY;
+       }
+
+       protected function pull_from_stream(): bool {
+               if ( ! $this->stream ) {
+                       return false;
+               }
+
+               try {
+                       $pulled = $this->stream->pull( 65536 );
+               } catch ( \Exception $e ) {
+                       $pulled = 0;
+               }
+
+               if ( $pulled > 0 ) {
+                       $this->append_bytes( $this->stream->consume( $pulled ) );
+
+                       return true;
+               }
+
+               if ( $this->stream->reached_end_of_data() ) {
+                       $this->input_finished();
+               }
+
+               return false;
+       }
 
 	public function is_expecting_more_input() {
 		return $this->expecting_more_input;
@@ -2978,8 +3015,8 @@ class XMLProcessor {
 			return $text;
 		}
 
-		$decoded = XMLDecoder::decode( $text );
-		if ( ! isset( $decoded ) ) {
+               $decoded = XMLDecoder::decode( $text );
+               if ( ! isset( $decoded ) ) {
 			/**
 			 * If the attribute contained an invalid value, it's
 			 * a fatal error.
@@ -2995,12 +3032,24 @@ class XMLProcessor {
 			);
 
 			return false;
-		}
+               }
 
-		return $decoded;
-	}
+               return $decoded;
+       }
 
-	public function set_modifiable_text( $new_value ) {
+       public function get_all_modifiable_text_until_next_tag() {
+               $text = $this->get_modifiable_text();
+               while ( $this->next_token() ) {
+                       if ( '#tag' === $this->get_token_type() ) {
+                               break;
+                       }
+                       $text .= $this->get_modifiable_text();
+               }
+
+               return $text;
+       }
+
+       public function set_modifiable_text( $new_value ) {
 		switch ( $this->parser_state ) {
 			case self::STATE_TEXT_NODE:
 			case self::STATE_COMMENT:
@@ -3283,47 +3332,60 @@ class XMLProcessor {
 	 * @access private
 	 *
 	 */
-	private function step( $node_to_process = self::PROCESS_NEXT_NODE ) {
-		// Refuse to proceed if there was a previous error.
-		if ( null !== $this->last_error ) {
-			return false;
-		}
+       private function step( $node_to_process = self::PROCESS_NEXT_NODE ) {
+               while ( true ) {
+                       if ( null !== $this->last_error ) {
+                               return false;
+                       }
 
-		// Finish stepping when there are no more tokens in the document.
-		if (
-			self::STATE_INCOMPLETE_INPUT === $this->parser_state ||
-			self::STATE_COMPLETE === $this->parser_state
-		) {
-			return false;
-		}
+                       if ( self::STATE_INCOMPLETE_INPUT === $this->parser_state ) {
+                               if ( $this->pull_from_stream() ) {
+                                       $node_to_process = self::PROCESS_CURRENT_NODE;
+                                       continue;
+                               }
 
-		if ( self::PROCESS_NEXT_NODE === $node_to_process ) {
-			if ( $this->is_empty_element() ) {
-				$this->pop_open_element();
-			}
-		}
+                               return false;
+                       }
 
-		try {
-			switch ( $this->parser_context ) {
-				case self::IN_PROLOG_CONTEXT:
-					return $this->step_in_prolog( $node_to_process );
-				case self::IN_ELEMENT_CONTEXT:
-					return $this->step_in_element( $node_to_process );
-				case self::IN_MISC_CONTEXT:
-					return $this->step_in_misc( $node_to_process );
-				default:
-					$this->last_error = self::ERROR_UNSUPPORTED;
+                       if ( self::STATE_COMPLETE === $this->parser_state ) {
+                               return false;
+                       }
 
-					return false;
-			}
-		} catch ( XMLUnsupportedException $e ) {
-			/*
-			 * Exceptions are used in this class to escape deep call stacks that
-			 * otherwise might involve messier calling and return conventions.
-			 */
-			return false;
-		}
-	}
+                       if ( self::PROCESS_NEXT_NODE === $node_to_process ) {
+                               if ( $this->is_empty_element() ) {
+                                       $this->pop_open_element();
+                               }
+                       }
+
+                       try {
+                               switch ( $this->parser_context ) {
+                                       case self::IN_PROLOG_CONTEXT:
+                                               $result = $this->step_in_prolog( $node_to_process );
+                                               break;
+                                       case self::IN_ELEMENT_CONTEXT:
+                                               $result = $this->step_in_element( $node_to_process );
+                                               break;
+                                       case self::IN_MISC_CONTEXT:
+                                               $result = $this->step_in_misc( $node_to_process );
+                                               break;
+                                       default:
+                                               $this->last_error = self::ERROR_UNSUPPORTED;
+                                               $result            = false;
+                               }
+                       } catch ( XMLUnsupportedException $e ) {
+                               return false;
+                       }
+
+                       if ( false === $result && self::STATE_INCOMPLETE_INPUT === $this->parser_state ) {
+                               if ( $this->pull_from_stream() ) {
+                                       $node_to_process = self::PROCESS_CURRENT_NODE;
+                                       continue;
+                               }
+                       }
+
+                       return $result;
+               }
+       }
 
 	/**
 	 * Parses the next node in the 'prolog' part of the XML document.

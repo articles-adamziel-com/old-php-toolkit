@@ -8,6 +8,7 @@
 
 use PHPUnit\Framework\TestCase;
 use WordPress\XML\XMLProcessor;
+use WordPress\ByteStream\FileReadWriteStream;
 
 /**
  * @group xml-api
@@ -1843,7 +1844,7 @@ XML;
 		$this->assertEquals( 'syntax', $processor->get_last_error(), 'Did not detect a syntax error' );
 	}
 
-	public function test_doctype_in_tag_content_is_syntax_error() {
+        public function test_doctype_in_tag_content_is_syntax_error() {
 		$processor = XMLProcessor::create_from_string(
 			'<root>Content<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"></root>'
 		);
@@ -1851,7 +1852,32 @@ XML;
 		$processor->next_token();
 		$processor->next_token();
 
-		$this->assertFalse( $processor->next_token(), 'Did not reject DOCTYPE in tag content' );
-		$this->assertEquals( 'syntax', $processor->get_last_error(), 'Did not detect a syntax error' );
-	}
+                $this->assertFalse( $processor->next_token(), 'Did not reject DOCTYPE in tag content' );
+                $this->assertEquals( 'syntax', $processor->get_last_error(), 'Did not detect a syntax error' );
+        }
+
+       public function test_auto_pull_from_stream() {
+               $xml   = '<root><child>Hello</child></root>';
+               $path  = tempnam( sys_get_temp_dir(), 'xml' );
+               file_put_contents( $path, $xml );
+               $stream    = \WordPress\ByteStream\FileReadWriteStream::from_path( $path, false );
+               $processor = XMLProcessor::create_for_streaming( $stream );
+
+               $this->assertTrue( $processor->next_tag(), 'Failed to auto pull root tag' );
+               $this->assertSame( 'root', $processor->get_tag() );
+
+               $this->assertTrue( $processor->next_tag(), 'Failed to auto pull child tag' );
+               $this->assertSame( 'child', $processor->get_tag() );
+       }
+
+       public function test_get_all_modifiable_text_until_next_tag() {
+               $xml       = '<root>Hello <![CDATA[world]]>!</root>';
+               $processor = XMLProcessor::create_from_string( $xml );
+
+               $this->assertTrue( $processor->next_tag( 'root' ) );
+               $this->assertTrue( $processor->next_token() );
+               $this->assertSame( 'Hello world!', $processor->get_all_modifiable_text_until_next_tag() );
+               $this->assertTrue( $processor->next_tag() );
+               $this->assertTrue( $processor->is_tag_closer() );
+       }
 }
