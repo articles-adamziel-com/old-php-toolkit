@@ -1158,7 +1158,7 @@ class WP_Static_Files_Editor_Plugin {
 
 			// Let's replace the URL in the content with the relative URL.
 			$original_url = $url->searchParams->get( 'path' );
-			$p->set_raw_url( $original_url );
+			$p->set_url( $original_url, $url );
 		}
 
 		return $p->get_updated_html();
@@ -1192,7 +1192,7 @@ class WP_Static_Files_Editor_Plugin {
 			$new_url           = WPURL::parse( $url->pathname, $parsed_site_url );
 			$new_url->pathname = $expected_endpoint_path;
 			$new_url->searchParams->set( 'path', $p->get_raw_url() );
-			$p->set_raw_url( $new_url->__toString() );
+			$p->set_url( $new_url->__toString(), $new_url );
 		}
 
 		return $p->get_updated_html();
