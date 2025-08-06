@@ -103,7 +103,7 @@ class EntityImporter {
 		$this->exists               = $empty_types;
 		$this->logger               = new Logger();
 
-		$this->options = wp_parse_args(
+		$this->options = array_merge(
 			$options,
 			array(
 				'prefill_existing_posts'    => true,
@@ -115,7 +115,9 @@ class EntityImporter {
 		);
 
 		// Load the function wp_read_audio_metadata
-		require_once ABSPATH . 'wp-admin/includes/media.php';
+		if(!function_exists('wp_read_audio_metadata')) {
+			require_once ABSPATH . 'wp-admin/includes/media.php';
+		}
 	}
 
 	public function import_entity( ImportEntity $entity ) {
@@ -144,6 +146,20 @@ class EntityImporter {
 	}
 
 	public function import_site_option( $data ) {
+		/**
+		 * Ignore site URL options. There doesn't seem to be a compelling use-case for
+		 * overwriting the site URL during a content import. For example, WXR files may
+		 * specify a site URL (typically of the source site) and it is emitted as a
+		 * siteurl option. Is that a good reason to change the target site URL, trigger
+		 * a redirect, and very likely break the entire site? No.
+		 *
+		 * We may need to revisit this approach if this class is ever used to import
+		 * from data sources different than static content files, e.g. a database dump.
+		 */
+		if($data['option_name'] === 'siteurl' || $data['option_name'] === 'home') {
+			return;
+		}
+
 		$this->logger->info(
 			sprintf(
 			/* translators: %s: option name */
@@ -603,7 +619,7 @@ class EntityImporter {
 			 * @param  array  $comments  Raw comment data, already processed by {@see process_comments}.
 			 * @param  array  $terms  Raw term data, already processed.
 			 */
-			do_action( 'wxr_importer_process_failed_post', $post_id, $data, $meta, $comments, $terms );
+			do_action( 'wxr_importer_process_failed_post', $post_id, $data, $meta );
 
 			return false;
 		}
@@ -737,7 +753,7 @@ class EntityImporter {
 
 			default:
 				// associated object is missing or not imported yet, we'll retry later
-				$this->missing_menu_items[] = $item;
+				// $this->missing_menu_items[] = $item;
 				$this->logger->debug( 'Unknown menu item type' );
 				break;
 		}
@@ -1203,7 +1219,7 @@ class Logger {
 	 * @param  string  $message  Message to log
 	 */
 	public function debug( $message ) {
-		// echo( '[DEBUG] ' . $message );
+		echo( '[DEBUG] ' . $message . "\n" );
 	}
 
 	/**
@@ -1212,7 +1228,7 @@ class Logger {
 	 * @param  string  $message  Message to log
 	 */
 	public function info( $message ) {
-		// echo( '[INFO] ' . $message );
+		echo( '[INFO] ' . $message . "\n" );
 	}
 
 	/**
@@ -1221,7 +1237,7 @@ class Logger {
 	 * @param  string  $message  Message to log
 	 */
 	public function warning( $message ) {
-		echo( '[WARNING] ' . $message );
+		echo( '[WARNING] ' . $message . "\n" );
 	}
 
 	/**
@@ -1230,7 +1246,7 @@ class Logger {
 	 * @param  string  $message  Message to log
 	 */
 	public function error( $message ) {
-		echo( '[ERROR] ' . $message );
+		echo( '[ERROR] ' . $message . "\n" );
 	}
 
 	/**
@@ -1239,6 +1255,6 @@ class Logger {
 	 * @param  string  $message  Message to log
 	 */
 	public function notice( $message ) {
-		// echo( '[NOTICE] ' . $message );
+		echo( '[NOTICE] ' . $message . "\n" );
 	}
 }

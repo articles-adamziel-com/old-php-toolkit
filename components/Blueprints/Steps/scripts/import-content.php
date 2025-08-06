@@ -10,6 +10,7 @@ use WordPress\HttpClient\Client;
 use WordPress\DataLiberation\EntityReader\EPubEntityReader;
 use WordPress\DataLiberation\EntityReader\FilesystemEntityReader;
 use WordPress\DataLiberation\EntityReader\WXREntityReader;
+use WordPress\DataLiberation\Importer\EntityImporter;
 use WordPress\DataLiberation\Importer\ImportSession;
 use WordPress\DataLiberation\Importer\ImportUtils;
 use WordPress\DataLiberation\Importer\RetryFrontloadingIterator;
@@ -244,10 +245,6 @@ function run_content_import( $options ) {
 			bail_out( 'The "source" option is required.' );
 		}
 
-		if(!isset($options['execution_context_root'])) {
-			bail_out( 'The "execution_context_root" option is required.' );
-		}
-
 		// Set up progress stages
 		$mainTracker->split([
 			'setup' => ['ratio' => 10, 'caption' => 'Setting up import'],
@@ -263,9 +260,12 @@ function run_content_import( $options ) {
 		$content_source = DataReference::create($options['source'], [
 			ExecutionContextPath::class,
 		]);
-		$execution_context = LocalFilesystem::create($options['execution_context_root']);
 		$resolver = new DataReferenceResolver($httpClient);
-		$resolver->setExecutionContext($execution_context);
+		if(isset($options['execution_context_root']) && $options['execution_context_root'] !== '') {
+			$resolver->setExecutionContext(
+				LocalFilesystem::create($options['execution_context_root'])
+			);
+		}
 		$resolved_source = $resolver->resolve_uncached($content_source);
 
 		$setupTracker->set(30, 'Configuring import mode');
@@ -570,6 +570,7 @@ function run_content_import( $options ) {
 		$importer = StreamImporter::create(
 			$entity_reader_factory,
 			array(
+				'entity_sink' => new EntityImporter(),
 				'source_site_url' => $source_site_url,
 				'new_site_content_root_url' => NEW_SITE_CONTENT_ROOT,
 				'source_media_root_urls' => $options['media_url'] ?? array( $source_site_url ),

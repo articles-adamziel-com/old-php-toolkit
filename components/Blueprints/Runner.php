@@ -60,6 +60,13 @@ use function WordPress\Filesystem\wp_unix_sys_get_temp_dir;
 use function WordPress\Zip\is_zip_file_stream;
 
 class Runner {
+	const EXECUTION_MODE_CREATE_NEW_SITE = 'create-new-site';
+	const EXECUTION_MODE_APPLY_TO_EXISTING_SITE = 'apply-to-existing-site';
+	const EXECUTION_MODES = [
+		self::EXECUTION_MODE_CREATE_NEW_SITE,
+		self::EXECUTION_MODE_APPLY_TO_EXISTING_SITE,
+	];
+	
 	/**
 	 * @var RunnerConfiguration
 	 */
@@ -114,7 +121,7 @@ class Runner {
 		$this->configuration = $configuration;
 		$this->validateConfiguration( $configuration );
 
-		$this->client      = new Client();
+		$this->client      = apply_filters('blueprint.http_client', new Client());
 		$this->mainTracker = new Tracker();
 
 		// Set up progress logging
@@ -135,17 +142,17 @@ class Runner {
 
 		// Validate execution mode
 		$mode = $config->getExecutionMode();
-		if ( ! in_array( $mode, [ 'create-new-site', 'apply-to-existing-site' ], true ) ) {
-			throw new BlueprintExecutionException( "Execution mode must be either 'create-new-site' or 'apply-to-existing-site'." );
+		if ( ! in_array( $mode, self::EXECUTION_MODES, true ) ) {
+			throw new BlueprintExecutionException( "Execution mode must be one of: " . implode( ', ', self::EXECUTION_MODES ) );
 		}
 
 		// Validate site URL
 		// Note: $options is not defined in this context, so we skip this block.
 		// If you want to validate the site URL, you should use $config->getTargetSiteUrl().
 		$siteUrl = $config->getTargetSiteUrl();
-		if ( $mode === 'create-new-site' ) {
+		if ( $mode === self::EXECUTION_MODE_CREATE_NEW_SITE ) {
 			if ( empty( $siteUrl ) ) {
-				throw new BlueprintExecutionException( "Site URL is required when the execution mode is 'create-new-site'." );
+				throw new BlueprintExecutionException( sprintf( "Site URL is required when the execution mode is '%s'.", self::EXECUTION_MODE_CREATE_NEW_SITE ) );
 			}
 		}
 		if ( ! empty( $siteUrl ) && ! filter_var( $siteUrl, FILTER_VALIDATE_URL ) ) {
@@ -195,6 +202,7 @@ class Runner {
 
 	public function run(): void {
 		$tempRoot = wp_unix_sys_get_temp_dir() . '/wp-blueprints-runtime-' . uniqid();
+
 		// TODO: Are there cases where we should not have these permissions?
 		mkdir( $tempRoot, 0777, true );
 
@@ -227,8 +235,13 @@ class Runner {
 			$targetSiteFs   = LocalFilesystem::create( $this->configuration->getTargetSiteRoot() );
 			$wpCliReference = DataReference::create( 'https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar' );
 
-			$execution_context_root = $this->blueprintExecutionContext->get_meta()['root'];
-			assert(is_string($execution_context_root) && strlen($execution_context_root) > 0, 'Assertion failed: Execution context root was empty.');
+			$execution_context = $this->blueprintExecutionContext->get_meta();
+			if(
+				isset($execution_context['root']) &&
+				( !is_string($execution_context['root']) || strlen($execution_context['root']) === 0)
+			) {
+				throw new BlueprintExecutionException('Execution context was a local directory, but the Runner could not determine the root directory. This should never happen. Please report this as a bug.');
+			}
 
 			$this->runtime  = new Runtime(
 				$targetSiteFs,
@@ -238,7 +251,7 @@ class Runner {
 				$this->blueprintArray,
 				$tempRoot,
 				$wpCliReference,
-				$execution_context_root
+				isset($execution_context['root']) ? $execution_context['root'] : null
 			);
 			$this->progressObserver->setRuntime( $this->runtime );
 			$progress['wpCli']->setCaption( 'Downloading WP-CLI' );
@@ -247,16 +260,21 @@ class Runner {
 			], $progress['wpCli'] );
 
 			$progress['targetResolution']->setCaption( 'Resolving target site' );
-			if ( $this->configuration->getExecutionMode() === 'apply-to-existing-site' ) {
+			if ( $this->configuration->getExecutionMode() === self::EXECUTION_MODE_APPLY_TO_EXISTING_SITE ) {
 				ExistingSiteResolver::resolve( $this->runtime, $progress['targetResolution'], $this->wpVersionConstraint );
 			} else {
 				NewSiteResolver::resolve( $this->runtime, $progress['targetResolution'], $this->wpVersionConstraint, $this->recommendedWpVersion );
 			}
 			$progress['targetResolution']->finish();
 
+			do_action('blueprint.target_resolved');
+
 			$progress['data']->setCaption( 'Resolving data references' );
 			$this->assets->startEagerResolution( $this->dataReferencesToAutoResolve, $progress['data'] );
 			$this->executePlan( $progress['execution'], $plan, $this->runtime );
+
+			// @TODO: Assert WordPress is still correctly installed
+			
 			$progress->finish();
 		} finally {
 			// TODO: Optionally preserve workspace in case of error? Support resuming after error?
@@ -289,7 +307,14 @@ class Runner {
 			$blueprintString                 = $resolved->getStream()->consume_all();
 			$this->blueprintExecutionContext = LocalFilesystem::create( dirname( $reference->get_path() ) );
 		} else {
+			// For the purposes of Blueprint resolution, the execution context is the
+			// current working directory. This way, a path such as ./blueprint.json
+			// will mean "a blueprint.json file in the current working directory" and not
+			// "a ./blueprint.json path without a point of reference".
+			$this->assets->setExecutionContext( LocalFilesystem::create( getcwd() ) );
 			$resolved = $this->assets->resolve( $reference );
+			$this->assets->setExecutionContext( null );
+
 			if ( $resolved instanceof File ) {
 				$stream = $resolved->getStream();
 
@@ -377,6 +402,8 @@ class Runner {
 
 		$this->configuration->getLogger()->debug( 'Final resolved Blueprint: ' . json_encode( $this->blueprintArray, JSON_PRETTY_PRINT ) );
 
+		$this->blueprintArray = apply_filters( 'blueprint.resolved', $this->blueprintArray );
+
 		// Assert the Blueprint conforms to the latest JSON schema.
 		$v     = new HumanFriendlySchemaValidator(
 			json_decode( file_get_contents( __DIR__ . '/Versions/Version2/json-schema/schema-v2.json' ), true )
@@ -439,7 +466,7 @@ class Runner {
 		// WordPress Version Constraint
 		if ( isset( $this->blueprintArray['wordpressVersion'] ) ) {
 			$wp_version = $this->blueprintArray['wordpressVersion'];
-			$recommended = null;
+			$min = $max = $recommended = null;
 			if ( is_string( $wp_version ) ) {
 				$this->recommendedWpVersion = $wp_version;
 				$recommended = WordPressVersion::fromString( $wp_version );
@@ -466,6 +493,8 @@ class Runner {
 					$this->recommendedWpVersion = $wp_version['max'];
 					$max = WordPressVersion::fromString( $wp_version['max'] );
 					if ( ! $max ) {
+						// @TODO: Reuse this error message
+						// 'Unrecognized WordPress version. Please use "latest", a URL, or a numeric version such as "6.2", "6.0.1", "6.2-beta1", or "6.2-RC1"'
 						throw new BlueprintExecutionException( 'Invalid WordPress version string in wordpressVersion.max: ' . $wp_version['max'] );
 					}
 				}
@@ -486,6 +515,14 @@ class Runner {
 			// Note: In here's we're only checking if the version constraint is defined
 			// correctly. The actual version check for WordPress is done in
 			// NewSiteResolver and ExistingSiteResolver.
+		}
+
+		// Validate the override constraint if it was set
+		if ( $this->wpVersionConstraint ) {
+			$wpConstraintErrors = $this->wpVersionConstraint->validate();
+			if ( ! empty( $wpConstraintErrors ) ) {
+				throw new BlueprintExecutionException( 'Invalid WordPress version constraint from CLI override: ' . implode( '; ', $wpConstraintErrors ) );
+			}
 		}
 	}
 
@@ -627,9 +664,9 @@ class Runner {
 			// @TODO: Make sure this doesn't get included twice in the execution plan,
 			//        e.g. if the Blueprint specified this step manually.
 			if ( $step instanceof ImportContentStep ) {
-				if($this->configuration->isRunningAsPhar()) {
-					throw new InvalidArgumentException( '@TODO: Importing content is not supported when running as phar.' );
-				} else {
+				// if($this->configuration->isRunningAsPhar()) {
+				// 	throw new InvalidArgumentException( '@TODO: Importing content is not supported when running as phar.' );
+				// } else {
 					$libraries_phar_path = __DIR__ . '/../../dist/php-toolkit.phar';
 					if(!file_exists($libraries_phar_path)) {
 						throw new InvalidArgumentException(
@@ -642,7 +679,7 @@ class Runner {
 						'filename' => 'php-toolkit.phar',
 						'content' => file_get_contents( $libraries_phar_path )
 					] ) );
-				}
+				// }
 				array_unshift( $plan, $this->createStepObject( 'writeFiles', [
 					'files' => [
 						'php-toolkit.phar' => $source,
@@ -923,14 +960,6 @@ PHP
 
 				return new WriteFilesStep( $files );
 
-			case 'runPHP':
-				return new RunPHPStep(
-					$this->createDataReference( [
-						'filename' => 'run-php.php',
-						'content'  => $data['code'],
-					] ),
-					$data['env'] ?? []
-				);
 			case 'unzip':
 				$zipFile = $this->createDataReference( $data['zipFile'], [ ExecutionContextPath::class ] );
 

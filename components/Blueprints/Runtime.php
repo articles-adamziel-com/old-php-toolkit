@@ -75,7 +75,7 @@ class Runtime {
 		array $blueprint,
 		string $tempRoot,
 		DataReference $wpCliReference,
-		string $executionContextRoot
+		?string $executionContextRoot=null
 	) {
 		$this->targetFs       = $targetFs;
 		$this->configuration  = $configuration;
@@ -87,7 +87,7 @@ class Runtime {
 		$this->executionContextRoot = $executionContextRoot;
 	}
 
-	public function getExecutionContextRoot(): string {
+	public function getExecutionContextRoot(): ?string {
 		return $this->executionContextRoot;
 	}
 
@@ -231,8 +231,9 @@ class Runtime {
 		$process = $this->createPhpSubProcess( $code, $env, $input, $timeout );
 		$process->mustRun();
 
+		$output = $process->getOutputStream(Process::OUTPUT_FILE)->consume_all();
 		return new EvalResult(
-			$process->getOutputStream(Process::OUTPUT_FILE)->consume_all(),
+			$output,
 			$process
 		);
 	}
@@ -262,7 +263,7 @@ class Runtime {
 			$phpBinary = null;
 			if ( getenv('PHP_BINARY') ) {
 				$phpBinary = getenv('PHP_BINARY');
-			} elseif ( PHP_SAPI === 'cli' && isset($_SERVER['argv'][0]) ) {
+			} elseif ( PHP_BINARY ) {
 				$phpBinary = PHP_BINARY;
 			} else {
 				$phpBinary = 'php';

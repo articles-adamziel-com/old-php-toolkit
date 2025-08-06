@@ -67,6 +67,10 @@ class NewSiteResolver {
 
 		// If SQLite integration zip provided, unzip into appropriate folder
 		if ( $runtime->getConfiguration()->getDatabaseEngine() === 'sqlite' ) {
+			/*
+			 * @TODO: Ensure DB_NAME gets defined in wp-config.php before installing the SQLite plugin.
+			 */
+
 			$progress['resolve_assets']->setCaption( 'Downloading SQLite integration plugin' );
 			$resolved = $runtime->resolve( $assets['sqlite-integration'] );
 			if ( ! $resolved instanceof File ) {
@@ -97,22 +101,7 @@ class NewSiteResolver {
 		//    Technically, this is a "new site" resolver, but it's entirely possible
 		//    the developer-provided WordPress zip already has a sqlite database with the
 		//    a WordPress site installed..
-		$installCheck = $runtime->evalPhpCodeInSubProcess(
-			<<<'PHP'
-<?php
-$wp_load = getenv('DOCROOT') . '/wp-load.php';
-if (!file_exists($wp_load)) {
-append_output('0');
-exit;
-}
-require $wp_load;
-
-append_output( function_exists('is_blog_installed') && is_blog_installed() ? '1' : '0' );
-PHP
-
-		)->outputFileContent;
-
-		if ( trim( $installCheck ) !== '1' ) {
+		if ( ! self::isWordPressInstalled( $runtime, $progress ) ) {
 			if ( ! $targetFs->exists( '/wp-config.php' ) ) {
 				if ( $targetFs->exists( 'wp-config-sample.php' ) ) {
 					$targetFs->copy( 'wp-config-sample.php', 'wp-config.php' );
@@ -130,6 +119,8 @@ PHP
 				$wp_cli_path,
 				'core',
 				'install',
+				'--path=' . $runtime->getConfiguration()->getTargetSiteRoot(),
+
 				// For Docker compatibility. If we got this far, Blueprint runner was already
 				// allowed to run as root.
 				'--allow-root',
@@ -141,8 +132,37 @@ PHP
 				'--skip-email',
 			] );
 			$process->mustRun();
+
+			if ( ! self::isWordPressInstalled( $runtime, $progress ) ) {
+				// @TODO: This breaks in Playground CLI
+				throw new BlueprintExecutionException( 'WordPress installation failed' );
+			}
 		}
 		$progress->finish();
+	}
+
+	static private function isWordPressInstalled( Runtime $runtime, Tracker $progress ) {
+		$installCheck = $runtime->evalPhpCodeInSubProcess(
+			<<<'PHP'
+			<?php
+			$wp_load = getenv('DOCROOT') . '/wp-load.php';
+			if (!file_exists($wp_load)) {
+				append_output('0');
+				exit;
+			}
+			require $wp_load;
+
+			append_output( function_exists('is_blog_installed') && is_blog_installed() ? '1' : '0' );
+PHP
+			,
+			[
+				'DOCROOT' => $runtime->getConfiguration()->getTargetSiteRoot(),
+			],
+			null,
+			5
+		)->outputFileContent;
+
+		return trim( $installCheck ) === '1';
 	}
 
 	static private function resolveWordPressZipUrl( Client $client, string $version_string ): string {
@@ -166,8 +186,14 @@ PHP
 		$latestVersions = array_filter( $latestVersions['offers'], function ( $v ) {
 			return $v['response'] === 'autoupdate';
 		} );
-
+		$latestNonBeta = null;
+		
 		foreach ( $latestVersions as $apiVersion ) {
+			// Keep track of the first non-beta version (which is the latest)
+			if ( $latestNonBeta === null && strpos( $apiVersion['version'], 'beta' ) === false ) {
+				$latestNonBeta = $apiVersion;
+			}
+			
 			if ( $version_string === 'beta' && strpos( $apiVersion['version'], 'beta' ) !== false ) {
 				return $apiVersion['download'];
 			} elseif (
@@ -189,6 +215,11 @@ PHP
 				// version, e.g. "6.6"
 				return $apiVersion['download'];
 			}
+		}
+		
+		// If we're looking for beta but no beta was found, return latest
+		if ( $version_string === 'beta' && $latestNonBeta !== null ) {
+			return $latestNonBeta['download'];
 		}
 
 		/**
