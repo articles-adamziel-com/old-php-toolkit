@@ -27,6 +27,7 @@
         "squizlabs/php_codesniffer": "^3.6",
         "phpcompatibility/php-compatibility": "10.x-dev",
         "wp-coding-standards/wpcs": "^2.3",
+        "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
         "phpunit/phpunit": "^9.5",
         "phpstan/phpstan": "^1.0"
     },
@@ -45,7 +46,6 @@
             "components/HTML/./"
         ],
         "files": [
-            "components/DataLiberation/URL/functions.php",
             "components/Encoding/utf8_decoder.php",
             "components/Filesystem/functions.php",
             "components/Zip/functions.php",
@@ -75,8 +75,8 @@
         "build-blueprints-phar": "box compile -c phar-box.json",
         "regenerate-json-schema": "node components/Blueprints/Versions/Version2/json-schema/regenerate-schema.ts",
         "test": "phpunit -c phpunit.xml",
-        "lint": "phpcs --standard=WordPress .",
-        "lint-fix": "phpcbf --standard=WordPress ."
+        "lint": "phpcs .",
+        "lint-fix": "phpcbf ."
     },
     "repositories": [
         {
